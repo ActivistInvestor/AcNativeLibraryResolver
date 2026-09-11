@@ -73,7 +73,7 @@ namespace AcNativeLibraryResolverTest
          /// of acdbXX.dll at runtime. This allows this code to target
          /// any AutoCAD release from 2025 onward.
 
-         [DllImport("acdb24.dll", 
+         [DllImport("acdb2#.dll", 
             EntryPoint = "?acdbSetDbmod@@YAHPEAVAcDbDatabase@@H@Z",
             CallingConvention = CallingConvention.Cdecl)]
          public static extern int acdbSetDbmod(IntPtr database, int newval);
