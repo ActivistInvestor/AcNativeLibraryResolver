@@ -72,7 +72,7 @@ namespace AcMgdLib.Runtime
    ///    [DllImport("acdb24.dll", ...)]
    ///    
    /// When running on any release of AutoCAD (starting with AutoCAD 2025 
-   /// or later), the filename argument in the above DllImport attribute 
+   /// or later), the dllName argument in the above DllImport attribute 
    /// will be automatically replaced as follows:
    /// 
    ///    AutoCAD Release      Replacement filename
@@ -88,18 +88,19 @@ namespace AcMgdLib.Runtime
 
    public static class AcNativeLibraryResolver
    {
-      public const string ACDB_DLL = "acdb2#.dll";
+      const string ACDB_DLL = "acdb2#.dll";
       static ConcurrentDictionary<Assembly, bool> knownAssemblies = new();
-      private static bool initialized;
-      private static readonly HashSet<Assembly> _registeredAssemblies = new HashSet<Assembly>();
-      private static readonly object _lock = new object();
+      static bool initialized;
+      static readonly HashSet<Assembly> _registeredAssemblies = new HashSet<Assembly>();
+      static readonly object _lock = new object();
 
       ///  Caches pattern -> resolved module file path (or empty string for negative/ambiguous matches)
-      private static readonly ConcurrentDictionary<string, string> modulePaths =
+      static readonly ConcurrentDictionary<string, string> modulePaths =
           new ConcurrentDictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
       /// <summary>
       /// Registers the dynamic DllImport resolver for the calling assembly.
+      /// If the Initialize() method is called, calling this is not required.
       /// </summary>
 
       public static void Register(Assembly assembly = null)
@@ -136,20 +137,18 @@ namespace AcMgdLib.Runtime
          AppDomain.CurrentDomain.AssemblyLoad += assemblyLoad;
       }
 
-      private static void assemblyLoad(object sender, AssemblyLoadEventArgs args)
+      static void assemblyLoad(object sender, AssemblyLoadEventArgs args)
       {
          Register(args.LoadedAssembly);
       }
 
-      private static IntPtr Resolve(string libraryName, Assembly assembly, DllImportSearchPath? searchPath)
+      static IntPtr Resolve(string libraryName, Assembly assembly, DllImportSearchPath? searchPath)
       {
          if(string.IsNullOrWhiteSpace(libraryName))
             return IntPtr.Zero;
 
          string msg = $"[DllImport(\"{libraryName}\")]";
          string name = assembly.GetName().Name;
-
-         // DebugWrite($"Resolving {msg} for assembly {name}");
 
          ///  Fetch from cache or execute FindLoadedModuleFilePath only on cache miss
          string path = modulePaths.GetOrAdd(libraryName, GetLoadedModuleFilename);
@@ -168,7 +167,8 @@ namespace AcMgdLib.Runtime
 
          DebugWrite($"{msg} Failed to resolve to a loaded module.");
 
-         ///  Return IntPtr.Zero to let standard .NET runtime resolution handle non-matching names
+         ///  Return IntPtr.Zero to let standard .NET 
+         ///  runtime resolution handle non-matching names
          return IntPtr.Zero;
       }
 
@@ -181,7 +181,7 @@ namespace AcMgdLib.Runtime
       /// found, null is returned to indicate ambiguity.
       /// </summary>
       
-      internal static ProcessModule FindLoadedModule(string pattern, bool nested = false)
+      static ProcessModule FindLoadedModule(string pattern, bool nested = false)
       {
          var matches = Process.GetCurrentProcess().Modules
              .Cast<ProcessModule>()
@@ -196,7 +196,6 @@ namespace AcMgdLib.Runtime
             {
                return FindLoadedModule(pattern, true);
             }
-
             return null;
          }
 
@@ -234,6 +233,7 @@ namespace AcMgdLib.Runtime
          return result;
       }
 
+      [Conditional("DEBUG")]
       static void DebugWrite(string msg)
       {
          Debug.WriteLine($"{nameof(AcNativeLibraryResolver)}: {msg}");
@@ -254,7 +254,7 @@ namespace AcMgdLib.Runtime
       /// if matched.</param>
       /// <returns>True if a replacement was performed; otherwise, false.</returns>
       
-      private static bool TryReplaceFileVersion(ref string pattern)
+      static bool TryReplaceFileVersion(ref string pattern)
       {
          if(string.IsNullOrWhiteSpace(pattern) || AcDllVersion <= 0)
             return false;
@@ -298,7 +298,7 @@ namespace AcMgdLib.Runtime
          return true;
       }
 
-      private static int GetAcDllVersion()
+      static int GetAcDllVersion()
       {
          var matches = Process.GetCurrentProcess().Modules
              .Cast<ProcessModule>()
