@@ -1,0 +1,231 @@
+<Project>
+	
+	<!-- Directory.Build.targets
+	
+	See Readme.md for prerequisites and full details.
+	
+	
+	-->
+
+	<!-- AssemblySearchPaths and AcReferencePath are assigned
+	multiple times, once for each build cycle that targets a 
+	different framework version. 
+	
+	This ensures that MSBUILD uses the correct AutoCAD reference 
+	assemblies for each target framework.
+	
+	Because MSBUILD searches for reference assemblies in the paths 
+	specified in the <AssemblySearchPaths> property before it falls 
+	back to using the <HintPath> element specified for a reference, 
+	we can leverage this to allow framework-specific references to 
+	AutoCAD reference assemblies to be specified in the .csproj file, 
+	without	having to specify explicit locations in <HintPath> elements
+	for each reference.	-->
+
+	<PropertyGroup Condition="Exists('$(AcReferencePath)')">
+		<AssemblySearchPaths>$(AcReferencePath);$(AssemblySearchPaths)</AssemblySearchPaths>
+	</PropertyGroup>
+
+	<!-- 
+	========================================================= 
+	Predefined references for basic AutoCAD assemblies to be
+	used by all projects that use this file. 
+	
+	You can add additional references here, keeping in mind 
+	that they will be added to all projects that use this file.
+	
+	To accomodate extensions that are intended to not have a
+	dependence on AutoCAD (e.g., loaded into AcCoreConsole.exe,
+	or another RealDwg host application), You can set the
+	<RealDwgExtension> property to true in your .csproj file. 
+	If you do that, AcMgd.dll is not referenced.
+	
+	========================================================= 
+	-->
+	<PropertyGroup>
+		<RealDwgExtension Condition="'$(ExecutableName)' == 'accoreconsole.exe'">true</RealDwgExtension>
+	</PropertyGroup>
+	
+	<ItemGroup>
+		<Reference Include="acmgd" Condition="'$(RealDwgExtension)' != 'true'"> 
+			<Private>false</Private>
+			<SpecificVersion>false</SpecificVersion>
+		</Reference>
+		<Reference Include="acdbmgd"> 
+			<SpecificVersion>false</SpecificVersion>
+			<Private>false</Private>
+		</Reference>
+		<Reference Include="accoremgd">
+			<SpecificVersion>false</SpecificVersion>
+			<Private>false</Private> 
+		</Reference>
+	</ItemGroup>
+
+
+	<!-- ================================================================= -->
+	<!-- Support for startup .dwg, script file, and command line arguments -->
+	<!-- ================================================================= -->
+
+	<!--
+	Supports opening a .dwg file and/or running a .scr file, by adding the
+	needed command line arguments used by launchSettings.json when debugging.
+
+	Both the script file and the .dwg file are optional, and have the hard-
+	coded names "startup.dwg" and "startup.scr". If they exist in the project's
+	root folder, or in a subfolder having the same name as the current target 
+	framework's TFM, the corresponding command line arguments will be added to
+	the command line used to launch AutoCAD when debugging.
+	
+	Example, in a project that targets net10.0-windows and net8.0-windows, 
+	the following files could be added to the project folder:
+	
+	   MyProjectRoot\startup.dwg                  (used for all target frameworks)
+	   MyProjectRoot\net10.0-windows\startup.dwg  (used only for .net 10 target)
+	   MyProjectRoot\net8.0-windows\startup.dwg   (used only for .net 8 target)
+	   
+	The same framework-dependent conventions apply to the startup script file 
+	(startup.scr).
+	
+	This allows you to have a default .dwg file and/or script that gets loaded 
+	when you start debugging, without having to hard-code the file paths in the
+	launchSettings.json file. 
+	
+	-->
+
+	<!--
+	<PropertyGroup Condition="'$(TargetFramework)' != ''">
+		<DwgPath></DwgPath>
+		<ScriptPath></ScriptPath>
+		<CommandLine></CommandLine>
+
+		<DwgPath Condition="Exists('$(ProjectDir)$(TargetFramework)\startup.dwg')">$(ProjectDir)$(TargetFramework)\startup.dwg</DwgPath>
+		<DwgPath Condition="'$(DwgPath)' == '' And Exists('$(ProjectDir)startup.dwg')">$(ProjectDir)startup.dwg</DwgPath>
+
+		<ScriptPath Condition="Exists('$(ProjectDir)$(TargetFramework)\startup.scr')">$(ProjectDir)$(TargetFramework)\startup.scr</ScriptPath>
+		<ScriptPath Condition="'$(ScriptPath)' == '' And Exists('$(ProjectDir)startup.scr')">$(ProjectDir)startup.scr</ScriptPath>
+	</PropertyGroup>
+
+	<PropertyGroup Condition="Exists('$(DwgPath)')">
+		<CommandLine>"$(DwgPath)"</CommandLine>
+	</PropertyGroup>
+
+	<PropertyGroup Condition="Exists('$(ScriptPath)')">
+		<CommandLine>$(CommandLine) /b "$(ScriptPath)"</CommandLine>
+	</PropertyGroup>
+
+	<PropertyGroup>
+		<CommandLine>$(CommandLine) /nologo</CommandLine>
+	</PropertyGroup>
+
+	<PropertyGroup Condition="'$(CommandLineArgs)' != ''">
+		<CommandLine>$(CommandLineArgs) $(CommandLine)</CommandLine>
+	</PropertyGroup>	
+	-->
+	
+	<PropertyGroup Condition="'$(TargetFramework)' != ''">
+		<DwgPath></DwgPath>
+		<ScriptPath></ScriptPath>
+
+		<DwgPath Condition="Exists('$(ProjectDir)$(TargetFramework)\startup.dwg')">$(ProjectDir)$(TargetFramework)\startup.dwg</DwgPath>
+		<DwgPath Condition="'$(DwgPath)' == '' And Exists('$(ProjectDir)startup.dwg')">$(ProjectDir)startup.dwg</DwgPath>
+
+		<ScriptPath Condition="Exists('$(ProjectDir)$(TargetFramework)\startup.scr')">$(ProjectDir)$(TargetFramework)\startup.scr</ScriptPath>
+		<ScriptPath Condition="'$(ScriptPath)' == '' And Exists('$(ProjectDir)startup.scr')">$(ProjectDir)startup.scr</ScriptPath>
+
+		<CommandLine></CommandLine>
+	</PropertyGroup>
+
+	<PropertyGroup Condition="'$(TargetFramework)' != '' And Exists('$(DwgPath)')">
+		<CommandLine>"$(DwgPath)"</CommandLine>
+	</PropertyGroup>
+
+	<PropertyGroup Condition="'$(TargetFramework)' != '' And Exists('$(ScriptPath)')">
+		<CommandLine>$(CommandLine) /b "$(ScriptPath)"</CommandLine>
+	</PropertyGroup>
+
+	<PropertyGroup Condition="'$(TargetFramework)' != ''">
+		<CommandLine>$(CommandLine) /nologo</CommandLine>
+	</PropertyGroup>
+
+
+	<!-- ==================================================== -->
+	<!-- Diagnostics / Informational output -->
+	
+	<!-- Formatting macros -->
+	<PropertyGroup>
+		<!-- AutoCAD / Framework version -->
+		<TargetDisplayName>AutoCAD $(AcMinVer) / .NET $(TargetFrameworkVersion)</TargetDisplayName>
+		<!-- Project name and target framework -->
+		<ProjectDisplayName>$(MSBuildProjectName) ($(TargetFramework))</ProjectDisplayName>
+	</PropertyGroup>
+
+	<!-- Post-build: display the build target display 
+	name and the path to the AutoCAD reference assemblies 
+	that were used used for the build target.-->
+	
+	<Target Name="AfterBuildMessage" AfterTargets="Build">
+		<Message Text="[$(ProjectDisplayName)]: Built target for $(TargetDisplayName) using references from $(AcReferencePath)"
+			Condition="'$(AcReferencePath)' != ''"
+			Importance="high"></Message>
+	</Target>
+
+	<!-- Displays the command line arguments for debug/diagnostics purposes 
+	To enable, use <DebugCommandLineArgs>true</DebugCommandLineArgs>
+	in a PropertyGroup within the .csproj file.
+	-->
+
+	<Target Name="AfterBuildMessage2" AfterTargets="Build">
+		<Message Text="[$(ProjectDisplayName)]: Command Line Args: $(CommandLine)"
+			Condition="'$(DebugCommandLine)' == 'true'"
+			Importance="high"></Message>
+	</Target>
+
+
+	<!-- Verify that required environment variables are defined for 
+		 each targeted framework, and point to a valid path that 
+		 holds AutoCAD reference assemblies:
+	-->
+
+	<Target Name="ValidateAcReferencePath" BeforeTargets="PrepareForBuild">
+		<Error Condition="'$(_Ver)' == '4' And ('$(AC_NET_4_REF_PATH)' == '' Or !Exists('$(AC_NET_4_REF_PATH)\accoremgd.dll'))"
+			Text="[$(ProjectDisplayName)]: The 'AC_NET_4_REF_PATH' environment variable is not defined or the specified path does not contain reference assemblies for $(TargetDisplayName). Value: '$(AC_NET_4_REF_PATH)'."/>
+
+		<Error Condition="'$(_Ver)' == '8' And ('$(AC_NET_8_REF_PATH)' == '' Or !Exists('$(AC_NET_8_REF_PATH)\accoremgd.dll'))"
+			Text="[$(ProjectDisplayName)]: The 'AC_NET_8_REF_PATH' environment variable is not defined or does not contain reference assemblies for $(TargetDisplayName). Value: '$(AC_NET_8_REF_PATH)'."/>
+
+		<Error Condition="'$(_Ver)' == '10' And ('$(AC_NET_10_REF_PATH)' == '' Or !Exists('$(AC_NET_10_REF_PATH)\accoremgd.dll'))"
+			Text="[$(ProjectDisplayName)]: The 'AC_NET_10_REF_PATH' environment variable is not defined or does not contain reference assemblies for $(TargetDisplayName)'. Value: '$(AC_NET_10_REF_PATH)'."/>
+	</Target>
+
+	<!-- Displays the assembly search path for debug/diagnostics purposes 
+	To enable, use <DebugAssemblySearchPaths>true</DebugAssemblySearchPaths>
+	in a PropertyGroup within a .csproj file.
+	-->
+	
+	<Target Name="DebugAssemblySearchPaths" 
+			Condition="'$(DebugAssemblySearchPaths)' == 'true'"
+			BeforeTargets="ResolveAssemblyReferences">
+		<Message Text="[$(ProjectDisplayName)]: AssemblySearchPaths: $(AssemblySearchPaths)" Importance="high" />
+	</Target>
+
+	<!-- Displays the path that Visual Studio expects to find 
+	AutoCAD reference assemblies in. For debug/diagnostics purposes.
+	To enable, use <DebugAcadReferencePath>true</DebugAcadReferencePath>
+	in a PropertyGroup within .csproj file. Note that this path will also 
+	appear in the list of assembly search paths displayed by the above target.
+	-->
+	
+	<Target Name ="DebugAcadReferencePath"
+			Condition="'$(DebugAcadReferencePath)' == 'true'"
+			BeforeTargets="ResolveAssemblyReferences">
+		<Message Text="[$(ProjectDisplayName)]: AutoCAD Reference Path: $(AcReferencePath)" Importance="high" />
+	</Target>
+
+	<Target Name="DebugPaths" BeforeTargets="BeforeBuild">
+		<Message Importance="high" Text="--- ACTIVE TFM: $(TargetFramework) ---" />
+		<Message Importance="high" Text="Checking path: $(ProjectDir)$(TargetFramework)\startup.dwg" />
+		<Message Importance="high" Text="Resolved DwgPath: $(DwgPath)" />
+	</Target>
+	
+	
+</Project>

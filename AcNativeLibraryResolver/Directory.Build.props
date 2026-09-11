@@ -1,0 +1,130 @@
+<Project>
+
+	<!-- Directory.Build.props 
+	
+	IMPORTANT:
+	
+	Some of the conventions used in this file may no longer be valid with
+	AutoCAD 2025 and 2026 updates that use .NET 10.0. This file was designed
+	with the assumption that each product release and its updates use the same 
+	framework version, which is no longer the case. Hence constants such as
+	AUTOCAD_202X_OR_LATER are no longer reliable.
+	
+	The environment varibles which this code looks for can still be used,
+	but must point to folders containing assemblies that target the specified
+	framework versions.
+
+	If your objective is to target AutoCAD 2025 or later with a single code
+	base, you can point the AC_NET_10_REF_PATH environment variable to the
+	folder containing the AutoCAD 2025 update that uses .NET 10.0. That of
+	course, assumes that your code is not dependent on changes/additions to
+	later versions of the AutoCAD .NET API. Then, your build that targets
+	.NET 8.0 would be used with the initial releases of AutoCAD 2025 and 2026
+	that target .NET 8.0, and the build that targets .NET 10.0 would be used 
+	with the AutoCAD 2025 and 2026 updates that use	.NET 10.0, and AutoCAD 2027.
+	
+	Note that the README.MD file has not been updated to reflect these changes.
+	
+	See Readme.md for prerequisites.
+	
+	This file requires some or all of the 
+	following environment variables to be defined:
+	
+	AC_NET_4_REF_PATH   (Path to reference assemblies for .NET 4.x / AutoCAD 2020-2024)
+	AC_NET_8_REF_PATH   (Path to reference assemblies for .NET 8.0 / AutoCAD 2025 & 2026)
+	AC_NET_10_REF_PATH  (Path to reference assemblies for .NET 10.0 / AutoCAD 2027+)
+	
+	Each of the above variables only need to be defined if you 
+	are targeting the associated framework version. 
+	
+	Directory.Build.props, along with Directory.Build.targets 
+	vastly-simplifies the use of Multi-targeting to build multiple 
+	versions of a .NET extension for AutoCAD that each target 
+	different releases of AutoCAD and the .NET Framework versions 
+	they use, within a single project and code base.
+	
+	See Readme.md for complete documentation and instructions on 
+	how to create a project (or adapt an existing project) to
+	target multiple AutoCAD product releases and .NET framework 
+	versions.
+	
+	Important: 
+	
+	Use of this file and Directory.Build.targets requires the 
+	environment	variables described above to be set.
+	
+	-->
+
+	<!-- Suppress warnings about conflicts between assembly versions
+	used by AutoCAD Reference Assemblies, as they are automatically
+	unified by MSBuild. This is optional, and can be removed if you
+	want to see the warnings. You can also move it to each project's
+	csproj file to suppress warnings on a per-project basis.	
+	-->
+
+	<PropertyGroup>
+		<NoWarn>$(NoWarn);MSB3277</NoWarn>
+	</PropertyGroup>
+
+	<!-- The default name of the executable to launch in
+	debug sessions. This can be overridden by assigning
+	a different value to the <ExecutableName> property
+	in a .csproj file. For example, it can be set to
+	"accoreconsole.exe" to use AutoCAD Core Console as
+	the debug target. This property is referenced from
+	launchSettings.json -->
+	
+	<PropertyGroup>
+		<ExecutableName>acad.exe</ExecutableName>
+	</PropertyGroup>
+
+	<!-- Framework / AutoCAD mapping       
+	
+	Defines $(AcReferencePath) and other framework-specific properties 
+	based on the current TFM. See Readme.md for a complete explanation 
+	of these properties. These properties will be assigned to different
+	values depending on what target framework is currently being built.
+	The $(_Ver) property is primarily for internal use within the included
+	Directory.Build.targets file, and always holds the same value as the 
+	$(FrameworkMajorVer) property.
+	
+	-->
+
+	<Choose>
+		<When Condition="'$(TargetFramework)' != '' And $(TargetFramework.StartsWith('net4'))">
+			<PropertyGroup Condition="Exists('$(AC_NET_4_REF_PATH)')">
+				<AcReferencePath>$(AC_NET_4_REF_PATH)</AcReferencePath>
+				<AcMinVer>2020</AcMinVer>
+				<AcMaxVer>2024</AcMaxVer>
+				<FrameworkMajorVer>4</FrameworkMajorVer>
+				<_Ver>4</_Ver>
+				<DefineConstants>$(DefineConstants);AUTOCAD_2020_OR_GREATER</DefineConstants>
+				<PlatformTarget>x64</PlatformTarget>
+			</PropertyGroup>
+		</When>
+
+		<When Condition="'$(TargetFramework)' != '' And $(TargetFramework.StartsWith('net8'))">
+			<PropertyGroup Condition="Exists('$(AC_NET_8_REF_PATH)')">
+				<AcReferencePath>$(AC_NET_8_REF_PATH)</AcReferencePath>
+				<AcMinVer>2025</AcMinVer>
+				<AcMaxVer>2026</AcMaxVer>
+				<FrameworkMajorVer>8</FrameworkMajorVer>
+				<_Ver>8</_Ver>
+				<DefineConstants>$(DefineConstants);AUTOCAD_2020_OR_GREATER;AUTOCAD_2025_OR_GREATER</DefineConstants>
+				<PlatformTarget>x64</PlatformTarget>
+			</PropertyGroup>
+		</When>
+
+		<When Condition="'$(TargetFramework)' != '' And $(TargetFramework.StartsWith('net10'))">
+			<PropertyGroup Condition="Exists('$(AC_NET_10_REF_PATH)')">
+				<AcReferencePath>$(AC_NET_10_REF_PATH)</AcReferencePath>
+				<FrameworkMajorVer>10</FrameworkMajorVer>
+				<_Ver>10</_Ver>
+				<AcMinVer>2027</AcMinVer>
+				<AcMaxVer>2027</AcMaxVer>
+				<DefineConstants>$(DefineConstants);AUTOCAD_2020_OR_GREATER;AUTOCAD_2025_OR_GREATER;AUTOCAD_2027_OR_GREATER</DefineConstants>
+				<PlatformTarget>x64</PlatformTarget>
+			</PropertyGroup>
+		</When>
+	</Choose>
+</Project>
