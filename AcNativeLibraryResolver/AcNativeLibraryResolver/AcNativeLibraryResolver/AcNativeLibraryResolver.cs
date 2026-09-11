@@ -1,4 +1,4 @@
-﻿/// AcNativeLibraryResolver47.cs  
+﻿/// AcNativeLibraryResolver.cs  
 /// 
 /// Activist Investor / Tony T
 /// 
