@@ -5,15 +5,12 @@
 /// Distributed under the terms of the MIT license
 
 
-using Autodesk.AutoCAD.ApplicationServices;
-using Autodesk.AutoCAD.Runtime;
-using AcRx = Autodesk.AutoCAD.Runtime;
-using System.Threading;
 using System.Diagnostics;
 using AcMgdLib.Runtime;
+using Autodesk.AutoCAD.Runtime;
 
 
-namespace DllImportResolver
+namespace AcNativeLibraryResolverTest
 {
 
    public class ThisApplication : IExtensionApplication
