@@ -3,12 +3,7 @@
 AcNativeLibraryResolver is a utility class that provides a mechanism for dynamically resolving filenames of native libraries containing APIs that are imported and called by managed extensions using the DllImport attribute. It enables the use of AutoCAD wcmatch-style wildcard patterns in the dllName argument of the DllImport attribute. 
 
 ### Prerequisites:
-This code requires AutoCAD 2025 and .NET 8.0 or later. Older AutoCAD releases and framework versions are not supported. The [AcMgdLib](https://github.com/ActivistInvestor/AcMgdLib) repository contains an alternative solution that works on older AutoCAD/Framework versions, but is somewhat more complicated to use than this one. 
-
-See:
-
-    * https://github.com/ActivistInvestor/AcMgdLib/blob/main/AcMgdLib/Common/DllImport.cs
-    * https://github.com/ActivistInvestor/AcMgdLib/blob/main/AcMgdLib/Common/AcDbNativeMethods.cs
+This code requires AutoCAD 2025 and .NET 8.0 or later. Older AutoCAD releases and framework versions are not supported. The [AcMgdLib](https://github.com/ActivistInvestor/AcMgdLib) repository contains an alternative solution that works on older AutoCAD/Framework versions, but is somewhat more complicated to use than this one. See [DllImport.cs](https://github.com/ActivistInvestor/AcMgdLib/blob/main/AcMgdLib/Common/DllImport.cs) & [AcDbNativeMethods.cs](https://github.com/ActivistInvestor/AcMgdLib/blob/main/AcMgdLib/Common/AcDbNativeMethods.cs)
 
 ## The Problem:
 
