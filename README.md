@@ -56,7 +56,7 @@ The following is a list of common AutoCAD DLLs that have release-dependent names
 
 ## Automatic resolution of DllImport DLL filenames
 
-In addition to supporting the use of wildcards in the DllImport attribute's dllName argument, AcNativeLibraryResolver will *automatically* replace mismatched version-dependent filenames with the correct filename for the AutoCAD release the code is running on.
+In addition to supporting the use of wildcards in the DllImport attribute's dllName argument, AcNativeLibraryResolver will *automatically* replace mismatched release-dependent filenames with the correct filename for the AutoCAD release the code is running on.
 
 For example, given this:
 
@@ -70,7 +70,7 @@ When running on any release of AutoCAD (starting with AutoCAD 2025 or later), th
    |2026|acdb26.dll
    |2027|acdb27.dll
    
-Automatic version-dependent filename resolution works for any of the above listed AutoCAD dlls having version-dependent names.
+Automatic release-dependent filename resolution works for any of the above listed AutoCAD dlls having release-dependent names.
 
 ## Usage
 
