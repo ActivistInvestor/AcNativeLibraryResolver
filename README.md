@@ -1,10 +1,15 @@
 ﻿### AcNativeLibraryResolver Class
 
-AcNativeLibraryResolver is a utility class that provides a mechanism for dynamically resolving filenames of native libraries containing APIs that are imported and called by managed extensions using the DllImport attribute. It enables the use of AutoCAD wcmatch-style wildcard patterns in the dllName argument of the DllImport attribute. This code requires AutoCAD 2025 and .NET 8.0 or later. Older AutoCAD releases and framework versions are not supported. The AcMgdLib repository contains an alternative solution that works on older AutoCAD/Framework versions, but is somewhat more complicated than this solution.
+AcNativeLibraryResolver is a utility class that provides a mechanism for dynamically resolving filenames of native libraries containing APIs that are imported and called by managed extensions using the DllImport attribute. It enables the use of AutoCAD wcmatch-style wildcard patterns in the dllName argument of the DllImport attribute. 
+
+### Prerequisites:
+This code requires AutoCAD 2025 and .NET 8.0 or later. Older AutoCAD releases and framework versions are not supported. The AcMgdLib repository contains an alternative solution that works on older AutoCAD/Framework versions, but is somewhat more complicated than this solution.
 
 ## The Problem:
 
-When using the DllImport attribute to import a native api, you must explicitly specify the name of the dll containing that API. Several AutoCAD DLLs have *release-dependent filenames*, which means that their names change in each product release. For example, The library that provides the bulk of the ObjectDBX database component resides in a DLL file whose name starts with "acdb" followed by two numeric digits that are the product release year. So for example, in AutoCAD 2025 this file's name is "acdb25.dll". In AutoCAD 2026, its name is "acdb26.dll", and so forth. Because the DllImport attribute normally requires you to explicitly specify the name of the library file containing the imported API, you can't use the same assembly across different product releases in which the name of the DLL differs.
+When using the DllImport attribute to import a native api, you must explicitly specify the name of the dll containing that API. Several AutoCAD DLLs have *release-dependent filenames*, which means that their names change in each product release. For example, The library that provides the bulk of the ObjectDBX database component resides in a DLL whose name starts with "acdb" followed by two numeric digits that are the product release year. 
+
+In AutoCAD 2025 this file's name is "acdb25.dll". In AutoCAD 2026, its name is "acdb26.dll", and so forth. Because the DllImport attribute normally requires you to explicitly hardwire the exact name of the library file containing the imported API, you can't use the same build of your assembly across different product releases in which the name of the DLL differs.
 
 So for example, a build that targets releases of AutoCAD that use acdb25.dll (AutoCAD 2025), cannot be used with releases of AutoCAD that use acdb26.dll (AutoCAD 2026), and so forth, and in some cases, it may be due to nothing other than the use of the [DllImport] attribute to import functions from a DLL with a release-dependent filename.
 
