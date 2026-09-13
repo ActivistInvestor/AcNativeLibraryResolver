@@ -51,7 +51,7 @@ The following is a list of common AutoCAD DLLs that have release-dependent names
 
 ## Automatic resolution of DllImport DLL filenames
 
-In addition to supporting the use of wildcards in the DllImport attribute's dllName argument, this library will automatically replace mismatched version-dependent filenames with the correct filename for the AutoCAD release the code is running on.
+In addition to supporting the use of wildcards in the DllImport attribute's dllName argument, AcNativeLibraryResolver will *automatically* replace mismatched version-dependent filenames with the correct filename for the AutoCAD release the code is running on.
 
 For example, given this:
 
@@ -78,9 +78,11 @@ The following shows the above example DllImport attribute used to import the acd
 static extern int acdbSetDbmod(IntPtr database, int newVal);
 ```
 
-The only difference between the two examples is the use of the "acdb2#" wildcard in the dllName argument of the DllImport attribute. It's just that simple.
+The only difference between the two examples is the use of the "acdb2#" wildcard in the dllName argument of the DllImport attribute. It's just that simple. 
 
-AcNativeLibraryResolver only requires a call to the AcNativeLibraryResolver's `Initialize()` method prior to calling any imported APIs that are marked with the DllImport attribute. The included project contains example/test code with an IExtensionApplication whose Initialize() method calls the AcNativeLibraryResolver's Initialize() method. 
+AcNativeLibraryResolver allows you to call native AutoCAD APIs that live in DLLs that have release-dependent filenames *without having to hard-code the name of the DLL into your code*.
+
+Enabling wildcard support in the DllImport attribute's dllName argument only requires a call to the AcNativeLibraryResolver's `Initialize()` method prior to calling any imported APIs that are marked with the DllImport attribute. The included project contains example/test code with an IExtensionApplication whose Initialize() method calls the AcNativeLibraryResolver's Initialize() method. 
 
 ```csharp
 public class MyApplication : IExtensionApplication
