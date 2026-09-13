@@ -24,7 +24,7 @@ static extern int acdbSetDbmod(IntPtr database, int newVal);
 
 Nothing more than the above use of [DllImport] makes the assembly that contains it dependent on acdb25.dll (AutoCAD 2025), which means the same assembly cannot be used with other releases of AutoCAD in which the name of that DLL differs.
 
-## The solution:
+## The Solution:
 
 
 Using AcNativeLibraryResolver, you can specify a *wildcard pattern* for the dll name in your DllImport attribute, and AcNativeLibraryResolver will attempt to locate a loaded module whose name matches the wildcard pattern. 
