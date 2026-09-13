@@ -56,7 +56,7 @@ The following is a list of common AutoCAD DLLs that have release-dependent names
 
 #### A word of caution regarding the use of wildcards: 
 
-Wildcard patterns used in the DllImport attribute's dllName argument must match the name of ***one and only one*** loaded module. If a wildcard pattern matches the names of multiple loaded modules, it will result in an error (usually a FileNotFoundException). For this reason, one should always use the *most-specific wildcard*, which are the ones listed in the above table. If for example, you used "acdb*.dll" as a wildcard, it will match multiple loaded modules and result in a failre.
+Wildcard patterns used in the DllImport attribute's dllName argument must match the name of ***one and only one*** loaded module. If a wildcard pattern matches the names of multiple loaded modules, it will result in an error (usually a FileNotFoundException). For this reason, one should always use the *most-specific wildcard* possible, which happen to be those listed in the above table. If for example, you used "acdb*.dll" as a wildcard, it will match multiple loaded modules and result in a failure.
 
 ## Automatic resolution of DllImport DLL filenames
 
