@@ -17,73 +17,7 @@ namespace AcMgdLib.Runtime
    /// <summary>
    /// AcNativeLibraryResolver Class
    /// 
-   /// AcNativeLibraryResolver is a utility class that provides 
-   /// a mechanism for dynamically resolving native library P/Invoke
-   /// imports (DllImport) in .NET assemblies, by enabling the use
-   /// of AutoCAD wcmatch-style wildcard patterns in the library name.
-   /// 
-   /// Using this class, you can specify a wildcard pattern for the 
-   /// dll name in your DllImport attribute, and the resolver will 
-   /// attempt to locate the corresponding loaded module in the current 
-   /// process.
-   /// 
-   /// The primiary use case is for calling native APIs that reside in
-   /// DLLs that have release-dependent filenames.
-   /// 
-   /// The following is a list of common AutoCAD DLLs that have release-
-   /// dependent names, and the wildcard patterns that can be used to
-   /// resolve them to the correct file for the AutoCAD release which the
-   /// code is running on, from AutoCAD 2025 and later. The '#' character 
-   /// in the pattern is a wildcard that matches a single digit, which is 
-   /// the release number of the AutoCAD DLL. Note that the files listed 
-   /// may not be included with all supported releases (AutoCAD 2025 or
-   /// later).
-   /// 
-   /// AutoCAD 2025 filename      Recommended Wildcard pattern
-   /// =======================================================
-   /// adui25.dll                 adui2#.dll
-   /// acdb25.dll                 acdb2#.dll 
-   /// AcDimX25.dll               AcDimX2#.dll
-   /// acge25.dll                 acge2#.dll
-   /// acgex25.dll                acgex2#.dll
-   /// AcGradient25.dll           AcGradient2#.dll
-   /// AcPersSubentNaming25.dll   AcPersSubentNaming2#.dll
-   /// acui25.dll                 acui2#.dll
-   /// AcWebDAV25.dll             AcWebDAV2#.dll
-   /// atlst25.dll                atlst2#.dll
-   /// hcreg25.dll                hcreg2#.dll
-   /// heidi25.dll                heidi2#.dll
-   /// modlr25.dll                modlr2#.dll
-   /// oletohdi25.dll             oletohdi2#.dll
-   /// plotcfg25.dll              plotcfg2#.dll
-   /// pm25.dll                   pm2#.dll
-   /// pmutil25.dll               pmutil2#.dll
-   /// regacad25.dll              regacad2#.dll
-   /// 
-   /// Automatic resolution of DllImport dllnames.
-   /// 
-   /// In addition to supporting the use of wildcards in the DllImport
-   /// attribute's dllName argument, this library will automatically 
-   /// replace mismatched version-dependent filenames with the correct
-   /// filename for the AutoCAD release the code is running on.
-   /// 
-   /// For example, given this:
-   /// 
-   ///    [DllImport("acdb24.dll", ...)]
-   ///    
-   /// When running on any release of AutoCAD (starting with AutoCAD 2025 
-   /// or later), the dllName argument in the above DllImport attribute 
-   /// will be automatically replaced as follows:
-   /// 
-   ///    AutoCAD Release      Replacement filename
-   ///    =========================================
-   ///    2025                 "acdb25.dll"
-   ///    2026                 "acdb26.dll"
-   ///    2027                 "acdb27.dll"
-   ///    
-   /// Automatic version-dependent filename resolution works for any of 
-   /// the above AutoCAD dlls having version-dependent names.
-   /// 
+   /// See README.MD for details
    /// </summary>
 
    public static class AcNativeLibraryResolver
@@ -94,7 +28,7 @@ namespace AcMgdLib.Runtime
       static readonly HashSet<Assembly> _registeredAssemblies = new HashSet<Assembly>();
       static readonly object _lock = new object();
 
-      ///  Caches pattern -> resolved module file path (or empty string for negative/ambiguous matches)
+      ///  Caches filename -> resolved module file path (or empty string for negative/ambiguous matches)
       static readonly ConcurrentDictionary<string, string> modulePaths =
           new ConcurrentDictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
@@ -173,10 +107,10 @@ namespace AcMgdLib.Runtime
       }
 
       /// <summary>
-      /// Finds a loaded module matching the specified wildcard pattern.
+      /// Finds a loaded module matching the specified wildcard filename.
       /// Returns null if zero or multiple (ambiguous) matches exist.
       /// 
-      /// The pattern argument must match one and only one loaded module name 
+      /// The filename argument must match one and only one loaded module name 
       /// (case-insensitive) for a successful match. If multiple matches are 
       /// found, null is returned to indicate ambiguity.
       /// </summary>
@@ -250,16 +184,16 @@ namespace AcMgdLib.Runtime
       /// AutoCAD 2026, this method will replace it with "acdb26.dll".
       /// 
       /// </summary>
-      /// <param name="pattern">The original filename, updated in-place 
+      /// <param name="filename">The original filename, updated in-place 
       /// if matched.</param>
       /// <returns>True if a replacement was performed; otherwise, false.</returns>
       
-      static bool TryReplaceFileVersion(ref string pattern)
+      static bool TryReplaceFileVersion(ref string filename)
       {
-         if(string.IsNullOrWhiteSpace(pattern) || AcDllVersion <= 0)
+         if(string.IsNullOrWhiteSpace(filename) || AcDllVersion <= 0)
             return false;
 
-         ReadOnlySpan<char> span = pattern.AsSpan().Trim();
+         ReadOnlySpan<char> span = filename.AsSpan().Trim();
 #if DEBUG
          string input = new string(span);
 #endif
@@ -280,19 +214,19 @@ namespace AcMgdLib.Runtime
          int targetD1 = (AcDllVersion / 10) % 10 + '0';
          int targetD2 = AcDllVersion % 10 + '0';
 
-         // Avoid allocating if the pattern already has the target version digits
+         // Avoid allocating if the filename already has the target version digits
          if(span[d1Idx] == targetD1 && span[d2Idx] == targetD2)
             return false;
 
-         pattern = string.Create(pattern.Length, (pattern, d1Idx, d2Idx, c1: (char)targetD1, c2: (char)targetD2), (buf, state) =>
+         filename = string.Create(filename.Length, (filename, d1Idx, d2Idx, c1: (char)targetD1, c2: (char)targetD2), (buf, state) =>
          {
-            state.pattern.AsSpan().CopyTo(buf);
+            state.filename.AsSpan().CopyTo(buf);
             buf[state.d1Idx] = state.c1;
             buf[state.d2Idx] = state.c2;
          });
 
 #if DEBUG
-         DebugWrite($"TryReplaceFileVersion({input}) => {pattern}");
+         DebugWrite($"TryReplaceFileVersion({input}) => {filename}");
 #endif
 
          return true;

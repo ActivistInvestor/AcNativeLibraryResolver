@@ -1,4 +1,4 @@
-﻿/// ThisApplication.cs
+﻿/// LayerFilterExtensionsApplication.cs
 /// 
 /// ActivistInvestor / Tony Tanzillo
 /// 
