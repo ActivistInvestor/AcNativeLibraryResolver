@@ -23,32 +23,30 @@ namespace AcMgdLib.Runtime
    public static class AcNativeLibraryResolver
    {
       const string ACDB_DLL = "acdb2#.dll";
-      static ConcurrentDictionary<Assembly, bool> knownAssemblies = new();
-      static bool initialized;
-      static readonly HashSet<Assembly> _registeredAssemblies = new HashSet<Assembly>();
-      static readonly object _lock = new object();
+      static volatile bool initialized;
+      static readonly HashSet<Assembly> registeredAssemblies = new HashSet<Assembly>();
+      static readonly object lockHolder = new object();
 
       ///  Caches filename -> resolved module file path (or empty string for negative/ambiguous matches)
       static readonly ConcurrentDictionary<string, string> modulePaths =
           new ConcurrentDictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
       /// <summary>
-      /// Registers the dynamic DllImport resolver for the calling assembly.
+      /// Registers the dynamic DllImport resolver for the specified assembly,
+      /// or the calling assembly if no assembly was specified.
+      /// 
       /// If the Initialize() method is called, calling this is not required.
       /// </summary>
 
       public static void Register(Assembly assembly = null)
       {
          assembly ??= Assembly.GetCallingAssembly();
-         if(!IsExempt(assembly))
+         lock(lockHolder)
          {
-            lock(_lock)
+            if(!IsExempt(assembly) && registeredAssemblies.Add(assembly))
             {
-               if(_registeredAssemblies.Add(assembly))
-               {
-                  NativeLibrary.SetDllImportResolver(assembly, Resolve);
-                  DebugWrite($"Registered assembly {assembly.GetName().Name} for DllImport resolution");
-               }
+               NativeLibrary.SetDllImportResolver(assembly, Resolve);
+               DebugWrite($"Registered assembly {assembly.GetName().Name} for dynamic DllImport resolution");
             }
          }
       }
@@ -57,46 +55,80 @@ namespace AcMgdLib.Runtime
       /// Registers all currently- and subsequently-loaded custom 
       /// assemblies for DllImport resolution. .NET Framework and 
       /// AutoCAD assemblies are not registered.
+      /// 
+      /// Referencing assemblies that are dependent on the services
+      /// provided by this library must call this method once before
+      /// any imported native API marked with the DllImport attribute
+      /// is called. If this method is called, the Register() method
+      /// does not need to be called for the referencing assembly.
       /// </summary>
 
       public static void Initialize()
       {
          if(initialized)
             return;
-         initialized = true;
-         foreach(var assembly in AppDomain.CurrentDomain.GetAssemblies())
+         lock(lockHolder)
          {
-            Register(assembly);
+            if(initialized)
+               return;
+            initialized = true;
+            foreach(var assembly in AppDomain.CurrentDomain.GetAssemblies())
+            {
+               Register(assembly);
+            }
+            AppDomain.CurrentDomain.AssemblyLoad += assemblyLoad;
          }
-         AppDomain.CurrentDomain.AssemblyLoad += assemblyLoad;
+
+         Debug.WriteLine($"AcNativeLibraryResolver Initialized (ThreadId = {Thread.CurrentThread.ManagedThreadId})");
       }
 
-      static void assemblyLoad(object sender, AssemblyLoadEventArgs args)
+      private static void assemblyLoad(object sender, AssemblyLoadEventArgs args)
       {
          Register(args.LoadedAssembly);
       }
+
+      /// <summary>
+      /// TODO: Fails when module is not loaded.
+      /// </summary>
+      /// <param name="libraryName"></param>
+      /// <param name="assembly"></param>
+      /// <param name="searchPath"></param>
+      /// <returns></returns>
 
       static IntPtr Resolve(string libraryName, Assembly assembly, DllImportSearchPath? searchPath)
       {
          if(string.IsNullOrWhiteSpace(libraryName))
             return IntPtr.Zero;
 
+         string originalLibraryName = libraryName.ToString();
+         string libraryName2 = libraryName.ToString();
          string msg = $"[DllImport(\"{libraryName}\")]";
          string name = assembly.GetName().Name;
+         IntPtr handle = IntPtr.Zero;
+         string path = string.Empty;
 
-         ///  Fetch from cache or execute FindLoadedModuleFilePath only on cache miss
-         string path = modulePaths.GetOrAdd(libraryName, GetLoadedModuleFilename);
+         /// Handle cases involving no wildcards or 
+         /// mismatched release-dependent dll names:
+
+         if(TryLoad(libraryName, assembly, searchPath, out handle))
+            return handle;
+
+         /// Try to resolve mismatched release-dependent dll name 
+         /// (e.g., "acdb24.dll" => "acdb25.dll" on AutoCAD 2025 or later)
          
+         if(TryReplaceFileVersion(ref libraryName2))
+         {
+            if(TryLoad(libraryName2, assembly, searchPath, out handle, originalLibraryName))
+               return handle;
+         }
+
+         ///  Fetch from cache or execute GetLoadedModuleFilename on cache miss
+         path = modulePaths.GetOrAdd(libraryName, GetLoadedModuleFilename);
+
          if(!string.IsNullOrWhiteSpace(path))
          {
-            lock(_lock)
-            {
-               if(NativeLibrary.TryLoad(path, assembly, searchPath, out IntPtr handle))
-               {
-                  DebugWrite($"{msg} resolved to {path}");
-                  return handle;
-               }
-            }
+            if(TryLoad(path, assembly, searchPath, out handle, originalLibraryName))
+               return handle;
          }
 
          DebugWrite($"{msg} Failed to resolve to a loaded module.");
@@ -105,30 +137,43 @@ namespace AcMgdLib.Runtime
          ///  runtime resolution handle non-matching names
          return IntPtr.Zero;
       }
+      static bool TryLoad(string libraryName, Assembly asm, DllImportSearchPath? searchPath, out IntPtr handle, string key = null)
+      {
+         string msg = $"[DllImport(\"{libraryName}\")]";
+         string name = asm.GetName().Name;
+         if(NativeLibrary.TryLoad(libraryName, asm, searchPath, out handle))
+         {
+            var m = AddLoadedModule(key ?? libraryName, handle);
+            DebugWrite($"{msg} resolved to {m.FileName}");
+            return true;
+         }
+         return false;
+      }
 
       /// <summary>
       /// Finds a loaded module matching the specified wildcard filename.
       /// Returns null if zero or multiple (ambiguous) matches exist.
       /// 
-      /// The filename argument must match one and only one loaded module name 
-      /// (case-insensitive) for a successful match. If multiple matches are 
+      /// The pattern argument must match <em>one and only one</em> loaded module 
+      /// name (case-insensitive) for a successful match. If multiple matches are 
       /// found, null is returned to indicate ambiguity.
       /// </summary>
-      
-      static ProcessModule FindLoadedModule(string pattern, bool nested = false)
+
+      static ProcessModule FindLoadedModule(string pattern, ProcessModuleCollection modules = null)
       {
-         var matches = Process.GetCurrentProcess().Modules
+         bool nested = modules is not null;
+         var matches = (modules ??= Process.GetCurrentProcess().Modules)
              .Cast<ProcessModule>()
              .Where(m => Utils.WcMatchEx(m.ModuleName, pattern, true));
 
          if(matches.Skip(1).Any())     ///  Multiple ambiguous matches found.
             return null;
 
-         if(!matches.Any() && !nested)
+         if(!nested && !matches.Any())
          {
             if(TryReplaceFileVersion(ref pattern))
             {
-               return FindLoadedModule(pattern, true);
+               return FindLoadedModule(pattern, modules);
             }
             return null;
          }
@@ -136,9 +181,26 @@ namespace AcMgdLib.Runtime
          return matches.FirstOrDefault();
       }
 
+      static ProcessModule FindLoadedModule(IntPtr handle)
+      {
+         return Process.GetCurrentProcess().Modules.Cast<ProcessModule>()
+            .FirstOrDefault(m => m.BaseAddress == handle);
+      }
+
+      static ProcessModule AddLoadedModule(string libraryName, IntPtr handle)
+      {
+         var module = FindLoadedModule(handle);
+         if(module != null)
+         {
+            modulePaths.TryAdd(libraryName, module.FileName);
+            Debug.WriteLine($"AddLoadedModule({libraryName}, {module.FileName})");
+         }
+         return module;
+      }
+
       static string GetLoadedModuleFilename(string pattern)
       {
-         return FindLoadedModule(pattern)?.FileName ?? string.Empty;
+         return FindLoadedModule(pattern)?.FileName ?? string.Empty;      
       }
 
       /// <summary>
@@ -149,13 +211,9 @@ namespace AcMgdLib.Runtime
 
       static bool IsExempt(Assembly asm)
       {
-         if(asm is null)
-            return true;
-         if(asm.IsDynamic)
+         if(asm is null || asm.IsDynamic)
             return true;
          bool result = false;
-         if(knownAssemblies.TryGetValue(asm, out result))
-            return result;
          var att = asm.GetCustomAttribute<AssemblyCompanyAttribute>();
          if(att != null)
          {
@@ -163,7 +221,6 @@ namespace AcMgdLib.Runtime
             result = company.StartsWith("Autodesk, Inc")
                || company.StartsWith("Microsoft Corporation");
          }
-         knownAssemblies.TryAdd(asm, result);
          return result;
       }
 
@@ -174,6 +231,8 @@ namespace AcMgdLib.Runtime
       }
 
       public static readonly int AcDllVersion = GetAcDllVersion();
+      static readonly char v1 = (char)((AcDllVersion / 10) % 10 + '0');
+      static readonly char v2 = (char) (AcDllVersion % 10 + '0');
 
       /// <summary>
       /// Replaces the numeric version in a version-dependent filename
@@ -187,7 +246,7 @@ namespace AcMgdLib.Runtime
       /// <param name="filename">The original filename, updated in-place 
       /// if matched.</param>
       /// <returns>True if a replacement was performed; otherwise, false.</returns>
-      
+
       static bool TryReplaceFileVersion(ref string filename)
       {
          if(string.IsNullOrWhiteSpace(filename) || AcDllVersion <= 0)
@@ -201,29 +260,24 @@ namespace AcMgdLib.Runtime
 
          // Must have an extension and at least 2 characters
          // preceding it for version digits
-         if(dotIndex < 2)
+         if(dotIndex < 3)
             return false;
 
-         int d1Idx = dotIndex - 2;
-         int d2Idx = dotIndex - 1;
+         char c1 = span[dotIndex - 2];
+         char c2 = span[dotIndex - 1];
 
          // Ensure the two characters prior to the extension are numeric digits
-         if(!char.IsAsciiDigit(span[d1Idx]) || !char.IsAsciiDigit(span[d2Idx]))
+         if(!char.IsAsciiDigit(c1) || !char.IsAsciiDigit(c2))
             return false;
-
-         int targetD1 = (AcDllVersion / 10) % 10 + '0';
-         int targetD2 = AcDllVersion % 10 + '0';
 
          // Avoid allocating if the filename already has the target version digits
-         if(span[d1Idx] == targetD1 && span[d2Idx] == targetD2)
-            return false;
-
-         filename = string.Create(filename.Length, (filename, d1Idx, d2Idx, c1: (char)targetD1, c2: (char)targetD2), (buf, state) =>
+         if(c1 == v1 && c2 == v2)
          {
-            state.filename.AsSpan().CopyTo(buf);
-            buf[state.d1Idx] = state.c1;
-            buf[state.d2Idx] = state.c2;
-         });
+            Debug.WriteLine($"filename {filename} version matches");
+            return false;
+         }
+         filename = $"{filename.Substring(0, dotIndex - 2)}{v1}{v2}{filename.Substring(dotIndex)}";
+         
 
 #if DEBUG
          DebugWrite($"TryReplaceFileVersion({input}) => {filename}");
