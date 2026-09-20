@@ -8,6 +8,7 @@ using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Reflection;
 using System.Runtime.InteropServices;
+using Autodesk.AutoCAD.DatabaseServices;
 using Autodesk.AutoCAD.Internal;
 
 namespace AcMgdLib.Runtime
@@ -24,8 +25,11 @@ namespace AcMgdLib.Runtime
       static volatile bool initialized;
       static readonly HashSet<Assembly> registeredAssemblies = new HashSet<Assembly>();
       static readonly object lockHolder = new object();
+      public static readonly int AcDbVersion = GetAcDbVersion();
+      static readonly char v1 = (char)((AcDbVersion / 10) % 10 + '0');
+      static readonly char v2 = (char)(AcDbVersion % 10 + '0');
 
-      ///  Caches filename -> resolved module file path (or empty string for negative/ambiguous matches)
+      ///  Caches module name -> resolved module file path (or empty string for negative/ambiguous matches)
       static readonly ConcurrentDictionary<string, string> modulePaths =
           new ConcurrentDictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
@@ -33,7 +37,7 @@ namespace AcMgdLib.Runtime
       /// Registers the dynamic DllImport resolver for the specified assembly,
       /// or the calling assembly if no assembly was specified.
       /// 
-      /// If the Initialize() method is called, calling this is not required.
+      /// If the Initialize() method was called, calling this is not required.
       /// </summary>
 
       public static void Register(Assembly assembly = null)
@@ -41,9 +45,12 @@ namespace AcMgdLib.Runtime
          assembly ??= Assembly.GetCallingAssembly();
          lock(lockHolder)
          {
-            if(!IsExempt(assembly) && registeredAssemblies.Add(assembly))
+            if(registeredAssemblies.Contains(assembly))
+               return;
+            if(!IsExempt(assembly))
             {
                NativeLibrary.SetDllImportResolver(assembly, Resolve);
+               registeredAssemblies.Add(assembly);
                DebugWrite($"Registered assembly {assembly.GetName().Name} for dynamic DllImport resolution");
             }
          }
@@ -137,11 +144,12 @@ namespace AcMgdLib.Runtime
       }
       static bool TryLoad(string libraryName, Assembly asm, DllImportSearchPath? searchPath, out IntPtr handle, string key = null)
       {
-         string msg = $"[DllImport(\"{libraryName}\")]";
+         key ??= libraryName;
+         string msg = $"[DllImport(\"{key}\")]";
          string name = asm.GetName().Name;
          if(NativeLibrary.TryLoad(libraryName, asm, searchPath, out handle))
          {
-            var m = AddLoadedModule(key ?? libraryName, handle);
+            var m = AddLoadedModule(key, handle);
             DebugWrite($"{msg} resolved to {m.FileName}");
             return true;
          }
@@ -228,14 +236,11 @@ namespace AcMgdLib.Runtime
          Debug.WriteLine($"{nameof(AcNativeLibraryResolver)}: {msg}");
       }
 
-      public static readonly int AcDllVersion = GetAcDllVersion();
-      static readonly char v1 = (char)((AcDllVersion / 10) % 10 + '0');
-      static readonly char v2 = (char) (AcDllVersion % 10 + '0');
-
       /// <summary>
-      /// Replaces the numeric version in a version-dependent filename
-      /// with the current version of the running product. The version
-      /// of the running product is in the AcDllVersion variable.
+      /// Replaces a mismatched release number in a release-dependent 
+      /// filename with the current release number of the running product. 
+      /// The current release number of the running product is stored in 
+      /// the AcDbVersion variable.
       /// 
       /// For example, given the filename "acdb24.dll", when running on
       /// AutoCAD 2026, this method will replace it with "acdb26.dll".
@@ -247,7 +252,7 @@ namespace AcMgdLib.Runtime
 
       static bool TryReplaceFileVersion(ref string filename)
       {
-         if(string.IsNullOrWhiteSpace(filename) || AcDllVersion <= 0)
+         if(string.IsNullOrWhiteSpace(filename) || AcDbVersion <= 0)
             return false;
 
          ReadOnlySpan<char> span = filename.AsSpan().Trim();
@@ -255,23 +260,15 @@ namespace AcMgdLib.Runtime
          string input = new string(span);
 #endif
          int dotIndex = span.LastIndexOf('.');
-
-         // Must have an extension and at least 2 characters
-         // preceding it for version digits
          if(dotIndex < 3)
             return false;
-
          char c1 = span[dotIndex - 2];
          char c2 = span[dotIndex - 1];
-
-         // Ensure the two characters prior to the extension are numeric digits
          if(!char.IsAsciiDigit(c1) || !char.IsAsciiDigit(c2))
             return false;
-
-         // Avoid allocating if the filename already has the target version digits
          if(c1 == v1 && c2 == v2)
          {
-            Debug.WriteLine($"filename {filename} version matches");
+            Debug.WriteLine($"filename {filename} version already matches");
             return false;
          }
          filename = $"{filename.Substring(0, dotIndex - 2)}{v1}{v2}{filename.Substring(dotIndex)}";
@@ -284,14 +281,14 @@ namespace AcMgdLib.Runtime
          return true;
       }
 
-      static int GetAcDllVersion()
+      static int GetAcDbVersion()
       {
-         var matches = Process.GetCurrentProcess().Modules
+         var module = Process.GetCurrentProcess().Modules
              .Cast<ProcessModule>()
-             .Where(m => Utils.WcMatchEx(m.ModuleName, ACDB_DLL, true));
-         if(matches.Any())
+             .FirstOrDefault(m => Utils.WcMatchEx(m.ModuleName, ACDB_DLL, true));
+         if(module != null)
          {
-            string moduleName = matches.First().ModuleName;
+            string moduleName = module.ModuleName;
             string versionStr = moduleName.Substring(4, 2);
             if(int.TryParse(versionStr, out int version))
                return version;
