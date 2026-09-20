@@ -4,8 +4,6 @@
 /// 
 /// Distributed under the terms of the MIT license
 
-using System.Runtime.CompilerServices;
-using System.Runtime.InteropServices;
 using Autodesk.AutoCAD.ApplicationServices;
 using Autodesk.AutoCAD.DatabaseServices;
 using Autodesk.AutoCAD.Runtime;

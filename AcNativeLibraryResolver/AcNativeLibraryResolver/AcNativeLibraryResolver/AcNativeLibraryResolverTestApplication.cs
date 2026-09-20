@@ -5,12 +5,8 @@
 /// Distributed under the terms of the MIT license
 
 
-using System.Diagnostics;
-using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
-using System.Runtime.InteropServices;
 using AcMgdLib.Runtime;
-using Autodesk.AutoCAD.ApplicationServices;
 using Autodesk.AutoCAD.Runtime;
 
 
