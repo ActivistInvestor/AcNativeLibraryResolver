@@ -277,32 +277,6 @@ namespace AcMgdLib.Runtime
          return IntPtr.Zero;
       }
 
-
-      internal static IntPtr ResolveThis(string libraryName, Assembly assembly, DllImportSearchPath? searchPath)
-      {
-         try
-         {
-            Debug.WriteLine($"ResolveThis(\"{libraryName}\", {assembly.GetName().Name}, {searchPath})");
-            if(IsEqual(libraryName, ACDB_DLL_PATTERN))
-            {
-               if(NativeLibrary.TryLoad(acdbDllName, assembly, searchPath, out IntPtr handle))
-                  return handle;
-            }
-            else
-            {
-               return AcNativeLibraryResolver.Resolve(libraryName, assembly, searchPath);
-            }
-         }
-         catch(System.Exception ex)
-         {
-            Debug.WriteLine($"ResolveThis(\"{libraryName}\", {assembly.GetName().Name}, {searchPath}): {ex.ToString()}");
-            if(ex.InnerException is not null)
-               Debug.WriteLine($"Inner exception: {ex.InnerException.ToString()}");
-         }
-         return IntPtr.Zero;
-
-      }
-
       static bool TryLoad(string libraryName, Assembly asm, DllImportSearchPath? searchPath, out IntPtr handle, string key = null)
       {
          key ??= libraryName;
