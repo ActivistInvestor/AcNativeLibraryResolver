@@ -31,7 +31,6 @@ Nothing more than the above use of [DllImport] makes the assembly that contains 
 
 ## The Solution:
 
-
 AcNativeLibraryResolver allows you to specify *wildcard patterns* in the dllName argument of DllImport attributes. When you specify a wildcard as the name of the dll, AcNativeLibraryResolver will attempt to locate a loaded module whose name matches the wildcard pattern, and will replace the pattern with the name of the matching dll. 
 
 The primiary use case for AcNativeLibraryResolver is calling native APIs that reside in DLLs that have release-dependent filenames.
@@ -81,9 +80,27 @@ When running on any release of AutoCAD (starting with AutoCAD 2025 or later), th
    
 Autonomous release-dependent filename resolution works for any of the above listed AutoCAD dlls having release-dependent names, provided they reside in the same folder where the current process executable (e.g., acad.exe) is located.
 
-## Usage
+## Supported Functionality
 
-The following shows the above example DllImport attribute used to import the acdbSetDbmod() native API, using a wildcard dllName that will work on any AutoCAD release from AutoCAD 2025 or later.
+AcNativeLibraryResolver supports the following three basic functions relating to resolution of the dllName argument passed to the DllImport attribute:
+
+### Wcmatch-style wildcards:
+     
+If the dllName argument is a wildcard pattern, it must match exactly *one and only one* loaded module, or module filename in the base directory. The wildcard argument is replaced with the matching filename.
+  
+### Mismatched release-dependent module names:
+  
+If the filename in the dllName argument ends with exactly two numeric digits, and there is no module found having that filename, the two numeric digits are replaced with that of the current product release (e.g., 25, 26, 27, etc). 
+  
+Hence, the dllName argument `"acdb24.dll"` will be replaced with `"acdb25.dll"` on AutoCAD 2025; `"acdb26.dll"` on AutoCAD 2026, and so on.
+  
+### Non-default executable name resolution:
+  
+If the dllName argument is `"acad.exe"`, and the filename of the current process is not `"acad.exe"`, then the `"acad.exe"` argument is replaced with the filename of the current process. Hence, `"acad.exe"` is always interpreted as the name of the current process, allowing code to be portable across multiple verticals/toolsets that use different executable names.
+
+### Usage
+
+The following shows the above example DllImport attribute used to import the `acdbSetDbmod()` native API, using a wildcard dllName argument that will work on any AutoCAD release from AutoCAD 2025 or later.
 
 ```csharp
 [DllImport("acdb2#.dll", 
@@ -92,9 +109,9 @@ The following shows the above example DllImport attribute used to import the acd
 static extern int acdbSetDbmod(IntPtr database, int newVal);
 ```
 
-The only difference between the two examples is the use of the "acdb2#" wildcard in the dllName argument of the DllImport attribute. It's just that simple. 
+The only difference between the two examples is the use of the `"acdb2#"` wildcard in the dllName argument of the DllImport attribute. It's just that simple. 
 
-Enabling wildcard support in the DllImport attribute's dllName argument only requires a call to the AcNativeLibraryResolver's `Initialize()` method prior to calling any imported APIs that are marked with the DllImport attribute. The included project contains example/test code with an IExtensionApplication whose Initialize() method calls the AcNativeLibraryResolver's Initialize() method. 
+Enabling resolution of the DllImport attribute's dllName argument only requires a call to the AcNativeLibraryResolver's `Initialize()` method, prior to calling any imported APIs that are marked with the DllImport attribute. The included project contains example/test code with an IExtensionApplication whose Initialize() method calls the AcNativeLibraryResolver's Initialize() method. 
 
 ```csharp
 public class MyApplication : IExtensionApplication
@@ -110,4 +127,4 @@ public class MyApplication : IExtensionApplication
 }
 ```
 
-If multiple .NET assemblies are being used which require DllImport resolution, it is highly-recommended that the AcNativeLibraryResolver be deployed as a separate assembly and be referenced from each assembly that requires its services.
+If multiple .NET assemblies require DllImport resolution, it is highly-recommended that the AcNativeLibraryResolver be deployed as a separate assembly and be referenced from each assembly that requires its services.
