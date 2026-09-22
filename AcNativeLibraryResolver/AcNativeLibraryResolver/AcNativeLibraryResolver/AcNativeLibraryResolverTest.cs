@@ -27,7 +27,10 @@ namespace AcNativeLibraryResolverTest
 
       /// <summary>
       /// Performs a zoom extents without changing 
-      /// the database's DBMOD flags.
+      /// the database's DBMOD flags. Useful from
+      /// scripting that opens and plots a drawing,
+      /// without trigging a save/discard changes
+      /// confirmation dialog.
       /// </summary>
       [CommandMethod("ZOOMEXTENTS")]
       public static void ZoomExtentsCommand()

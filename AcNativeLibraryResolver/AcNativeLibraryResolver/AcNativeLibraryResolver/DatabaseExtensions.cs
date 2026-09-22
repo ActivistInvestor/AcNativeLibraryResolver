@@ -94,6 +94,8 @@ namespace AcNativeLibraryResolverTest
       /// commonly used when changes are made to a new document, or
       /// a document that was just opened, by an event handler.
       /// 
+      /// This method is also useful for unit testing.
+      /// 
       /// Example:
       /// <code>
       /// 
@@ -131,7 +133,7 @@ namespace AcNativeLibraryResolverTest
          
          public void Dispose()
          {
-            if(db != null && db.IsAlive())
+            if(db != null && db.IsValid())
             {
                NativeMethods.acdbSetDbmod(db.UnmanagedObject, dbmod);
             }
@@ -155,7 +157,7 @@ namespace AcNativeLibraryResolverTest
             throw new ArgumentNullException(arg);
          if(database.IsDisposed)
             throw new ObjectDisposedException(arg);
-         if(!database.IsAlive())
+         if(!database.IsValid())
             throw new ArgumentException($"{arg}: Underlying AcDbDatabase does not exist");
          return database;
       }
@@ -165,11 +167,11 @@ namespace AcNativeLibraryResolverTest
       /// Database instance exists.
       /// </summary>
 
-      public static bool IsAlive(this Database database)
+      public static bool IsValid(this Database database)
       {
          if(database is null)
             throw new ArgumentNullException(nameof(database));
-         return Database.IdFromDb(database) != 0;
+         return !database.IsDisposed && Database.IdFromDb(database) != 0;
       }
 
 

@@ -4,12 +4,43 @@
 /// 
 /// Distributed under the terms of the MIT license
 
+/// Revisions
+/// 
+/// 9-20-26: 
+/// 
+/// Major refactoring to eliminate the use of SetDllImportResolver(),
+/// due to significant overhead it caused. That API was replaced with 
+/// an AssemblyLoadContext.ResolvingUnmanagedDLL event handler, which
+/// only notifies when a module cannot be found using default probing 
+/// algorithim/rules. In contrast, the SetDllImportResolver callback
+/// is preemptive, and is called before any default probing is done, 
+/// to give the consumer the ability to redirect to a module other than
+/// the one that would be chosen by default probing. Since this is not
+/// required in this use case, its overhead can be avoided.
+/// 
+/// Automatic mismatched release-dependent filename resolution:
+/// 
+/// When DllImport is used with a dll that does not exist in the current
+/// product, if the filename ends with two numeric digits, those two
+/// digits are replaced with the year/release number. So for example, 
+/// if "acdb24.dll" is used, and the code is running on AutoCAD 2026,
+/// the dllName will be resolved to "acdb26.dll".
+/// 
+/// DllImport from acad.exe:
+/// 
+/// When "acad.exe" is used in a DllImport's dllName, it is replaced
+/// with the name of the current process, allowing portability across
+/// multiple products that may not have the same executable name.
+/// 
+/// Additional miscellaneous bugs were also resolved.
+
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Reflection;
 using System.Runtime.InteropServices;
-using Autodesk.AutoCAD.DatabaseServices;
-using Autodesk.AutoCAD.Internal;
+using System.Runtime.Loader;
+using System.Text.RegularExpressions;
+using Autodesk.AutoCAD.Runtime;
 
 namespace AcMgdLib.Runtime
 {
@@ -21,53 +52,26 @@ namespace AcMgdLib.Runtime
 
    public static class AcNativeLibraryResolver
    {
-      const string ACDB_DLL = "acdb2#.dll";
+      const string ACDB_DLL_PATTERN = "acdb2#.dll";
+      const string ACAD_EXE = "acad.exe";
       static volatile bool initialized;
-      static readonly HashSet<Assembly> registeredAssemblies = new HashSet<Assembly>();
       static readonly object lockHolder = new object();
-      public static readonly int AcDbVersion = GetAcDbVersion();
-      static readonly char v1 = (char)((AcDbVersion / 10) % 10 + '0');
-      static readonly char v2 = (char)(AcDbVersion % 10 + '0');
-
-      ///  Caches module name -> resolved module file path (or empty string for negative/ambiguous matches)
+      static readonly Regex acdbRegEx = new Regex(@"^acdb\d{2}(?!\d)", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+      public static Lazy<int> acdbVersion = new Lazy<int>(GetAcDbModuleVersion, true);
+      public static readonly ProcessModule mainModule = Process.GetCurrentProcess().MainModule;
+      public static readonly ProcessModule acdbModule = GetAcDbModule();
+      static string acdbDllName = $"acdb{acdbVersion}.dll";
+      static readonly char v1 = (char)((acdbVersion.Value / 10) % 10 + '0');
+      static readonly char v2 = (char)(acdbVersion.Value % 10 + '0');
+      static volatile bool resolving = false;
+      ///  Caches module path -> resolved module file path (or empty string for negative/ambiguous matches)
       static readonly ConcurrentDictionary<string, string> modulePaths =
           new ConcurrentDictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
       /// <summary>
-      /// Registers the dynamic DllImport resolver for the specified assembly,
-      /// or the calling assembly if no assembly was specified.
-      /// 
-      /// If the Initialize() method was called, calling this is not required.
+      /// Must be called once to enable custom DllImport module resolution:
       /// </summary>
-
-      public static void Register(Assembly assembly = null)
-      {
-         assembly ??= Assembly.GetCallingAssembly();
-         lock(lockHolder)
-         {
-            if(registeredAssemblies.Contains(assembly))
-               return;
-            if(!IsExempt(assembly))
-            {
-               NativeLibrary.SetDllImportResolver(assembly, Resolve);
-               registeredAssemblies.Add(assembly);
-               DebugWrite($"Registered assembly {assembly.GetName().Name} for dynamic DllImport resolution");
-            }
-         }
-      }
-
-      /// <summary>
-      /// Registers all currently- and subsequently-loaded custom 
-      /// assemblies for DllImport resolution. .NET Framework and 
-      /// AutoCAD assemblies are not registered.
-      /// 
-      /// Referencing assemblies that are dependent on the services
-      /// provided by this library must call this method once before
-      /// any imported native API marked with the DllImport attribute
-      /// is called. If this method is called, the Register() method
-      /// does not need to be called for the referencing assembly.
-      /// </summary>
-
+      
       public static void Initialize()
       {
          if(initialized)
@@ -77,71 +81,228 @@ namespace AcMgdLib.Runtime
             if(initialized)
                return;
             initialized = true;
-            foreach(var assembly in AppDomain.CurrentDomain.GetAssemblies())
-            {
-               Register(assembly);
-            }
-            AppDomain.CurrentDomain.AssemblyLoad += assemblyLoad;
+            AssemblyLoadContext.Default.ResolvingUnmanagedDll += resolvingUnmanagedDll;
          }
-
          Debug.WriteLine($"AcNativeLibraryResolver Initialized (ThreadId = {Thread.CurrentThread.ManagedThreadId})");
       }
 
-      private static void assemblyLoad(object sender, AssemblyLoadEventArgs args)
+      static IntPtr resolvingUnmanagedDll(Assembly assembly, string libraryName)
       {
-         Register(args.LoadedAssembly);
+         if(IsAcDbDllPattern(libraryName))
+            return acdbModule.BaseAddress;
+         if(resolving)
+            return IntPtr.Zero;
+         lock(lockHolder)
+         {
+            if(resolving)
+               return IntPtr.Zero;
+            resolving = true;
+            try
+            {
+               return Resolve(libraryName, assembly, null);
+            }
+            finally
+            {
+               resolving = false;
+            }
+         }
+      }
+
+      /// Short-circuits the most-common use case, 
+      /// which is importing APIs from acdbXX.dll.
+      /// Checks for the 2 most-common recommended
+      /// wildcard patterns for acdbXX.dll, and
+      /// returns its module handle without any
+      /// futher processing.
+
+      private static bool IsAcDbDllPattern(string str)
+      {
+         if(string.IsNullOrWhiteSpace(str))
+            return false;
+         str = str.ToLower();
+         return str.Equals("acdb##.dll") || str.Equals("acdb2#.dll");
       }
 
       /// <summary>
-      /// TODO: Fails when module is not loaded.
+      /// Performs specialized resolution of the dllName argument 
+      /// passed to a DllImport attribute.
+      /// 
+      /// Supported scenarios:
+      /// 
+      ///   1. Wcmatch-style wildcards. 
+      ///      
+      ///   If the dllName argument is a wildcard, it must match
+      ///   exactly one and only one loaded module, or only one
+      ///   module filename in the base directory. The wildcard
+      ///   is replaced with the matching module's path.
+      ///   
+      ///   2. Mismatched release-dependent module names.
+      ///   
+      ///   If the filename in the dllName argument ends with two 
+      ///   numeric digits, and there is no module found matching 
+      ///   its path, the two numeric digits are replaced with that 
+      ///   of the current product release (e.g., 25, 26, 27, etc). 
+      ///   
+      ///   Hence, the dllName argument of "acdb24.dll" will be 
+      ///   replaced with "acdb25.dll" on AutoCAD 2025; "acdb26.dll" 
+      ///   on AutoCAD 2026, and so on.
+      ///   
+      ///   3. Non-default executable path.
+      ///   
+      ///   If the dllName argument is "acad.exe", it always resolves 
+      ///   to the current process executable filename, regardless of 
+      ///   what that is.
+      ///   
+      ///   4. Optimized 'hot-path' for acdbXX.dll
+      ///   
+      ///   Because importing from acdbXX.dll is the most-common use
+      ///   case, the code is optimized to recognize wildcards that
+      ///   match that dll's name, and will return its module handle 
+      ///   with no further processing when those wildcards are used.
+      /// 
       /// </summary>
-      /// <param name="libraryName"></param>
-      /// <param name="assembly"></param>
-      /// <param name="searchPath"></param>
+      /// <param path="libraryName"></param>
+      /// <param path="assembly"></param>
+      /// <param path="searchPath"></param>
       /// <returns></returns>
-
+      
       static IntPtr Resolve(string libraryName, Assembly assembly, DllImportSearchPath? searchPath)
       {
          if(string.IsNullOrWhiteSpace(libraryName))
             return IntPtr.Zero;
 
-         string originalLibraryName = libraryName.ToString();
-         string libraryName2 = libraryName.ToString();
+         if(IsAcDbDllPattern(libraryName))
+            return acdbModule.BaseAddress;
+
+         /// Special handling for "acad.exe", that always resolves to the
+         /// current process executable. If libraryName is "acad.exe", we 
+         /// return the handle of the main module, regardless of what its
+         /// module/filename is. This makes code that imports APIs from
+         /// the process executable/main module portable across different
+         /// flavors/toolsets that may not have the same executable name.
+
+         if(IsEqual(libraryName, ACAD_EXE))
+         {
+            return mainModule.BaseAddress;
+         }
+
+         string altLibraryName = libraryName.ToString();
          string msg = $"[DllImport(\"{libraryName}\")]";
-         string name = assembly.GetName().Name;
          IntPtr handle = IntPtr.Zero;
          string path = string.Empty;
 
-         /// Handle cases involving no wildcards or 
-         /// mismatched release-dependent dll names:
-
-         if(TryLoad(libraryName, assembly, searchPath, out handle))
-            return handle;
-
-         /// Try to resolve mismatched release-dependent dll name 
-         /// (e.g., "acdb24.dll" => "acdb25.dll" on AutoCAD 2025 or later)
-         
-         if(TryReplaceFileVersion(ref libraryName2))
+         /// Prioritize cached paths:        
+         if(modulePaths.TryGetValue(libraryName, out path))
          {
-            if(TryLoad(libraryName2, assembly, searchPath, out handle, originalLibraryName))
+            if(TryLoad(path, assembly, searchPath, out handle, libraryName))
                return handle;
          }
 
-         ///  Fetch from cache or execute GetLoadedModuleFilename on cache miss
-         path = modulePaths.GetOrAdd(libraryName, GetLoadedModuleFilename);
+         /// Try to resolve a mismatched, release-dependent module path 
+         /// (e.g., "acdb24.dll" => "acdb25.dll" on AutoCAD 2025).
+         /// This should work with both loaded and unloaded modules of any 
+         /// type (e.g., *.dll, *.arx, *.crx, *.dbx)
 
-         if(!string.IsNullOrWhiteSpace(path))
+         if(TryReplaceFileVersion(ref altLibraryName))
          {
-            if(TryLoad(path, assembly, searchPath, out handle, originalLibraryName))
+            if(TryLoad(altLibraryName, assembly, searchPath, out handle, libraryName))
                return handle;
          }
 
-         DebugWrite($"{msg} Failed to resolve to a loaded module.");
+         /// Look for a loaded module whose path matches 
+         /// a libraryName wildcard pattern. This will not
+         /// find the path of a library that is not loaded.
 
-         ///  Return IntPtr.Zero to let standard .NET 
-         ///  runtime resolution handle non-matching names
+         var process = Process.GetCurrentProcess();
+         process.Refresh();
+         var matches = process.Modules
+             .Cast<ProcessModule>()
+             .Where(m => m.ModuleName.Matches(libraryName))
+             .ToList();
+
+
+         if(matches.Count > 1)
+         {
+            DebugWrite($"{nameof(Resolve)}(\"{libraryName}\"): Multiple ambiguous matches found.");
+            return IntPtr.Zero;
+         }
+
+         if(matches.Count == 1)
+         {
+            var module = matches[0];
+            if(module != null)
+            {
+               return module.BaseAddress;
+            }
+         }
+
+         /// No loaded module's name matches the pattern.
+         /// Now try looking in the base directory for 
+         /// a matching file:
+
+         string baseDir = AppDomain.CurrentDomain.BaseDirectory;
+
+         var matchingFiles = Directory.EnumerateFiles(baseDir, "*", SearchOption.TopDirectoryOnly)
+             .Where(path => Path.GetFileName(path).Matches(libraryName))
+             .ToList();
+
+         if(matchingFiles.Count > 1)
+         {
+            DebugWrite($"{msg}: Multiple ambiguous files found matching \"{libraryName}\" in BaseDirectory.");
+            return IntPtr.Zero;
+         }
+         if(matchingFiles.Count == 1)
+         {
+            string matchedFilePath = matchingFiles[0];
+            string matchedFileName = Path.GetFileName(matchedFilePath);
+
+            // Attempt to load the module into the process using the DynamicLinker
+            try
+            {
+               SystemObjects.DynamicLinker.LoadModule(matchedFileName, true, false);
+               var module = FindLoadedModule(matchedFilePath);
+               if(module != null)
+               {
+                  AddLoadedModule(libraryName, module.BaseAddress);
+                  return module.BaseAddress;
+               }
+            }
+            catch(System.Exception ex)
+            {
+               DebugWrite($"LoadModule(\"{matchedFilePath}\") failed: {ex.Message}");
+               return IntPtr.Zero;
+            }
+         }
+         DebugWrite($"{msg} Module name resolution failed.");
          return IntPtr.Zero;
       }
+
+
+      internal static IntPtr ResolveThis(string libraryName, Assembly assembly, DllImportSearchPath? searchPath)
+      {
+         try
+         {
+            Debug.WriteLine($"ResolveThis(\"{libraryName}\", {assembly.GetName().Name}, {searchPath})");
+            if(IsEqual(libraryName, ACDB_DLL_PATTERN))
+            {
+               if(NativeLibrary.TryLoad(acdbDllName, assembly, searchPath, out IntPtr handle))
+                  return handle;
+            }
+            else
+            {
+               return AcNativeLibraryResolver.Resolve(libraryName, assembly, searchPath);
+            }
+         }
+         catch(System.Exception ex)
+         {
+            Debug.WriteLine($"ResolveThis(\"{libraryName}\", {assembly.GetName().Name}, {searchPath}): {ex.ToString()}");
+            if(ex.InnerException is not null)
+               Debug.WriteLine($"Inner exception: {ex.InnerException.ToString()}");
+         }
+         return IntPtr.Zero;
+
+      }
+
       static bool TryLoad(string libraryName, Assembly asm, DllImportSearchPath? searchPath, out IntPtr handle, string key = null)
       {
          key ??= libraryName;
@@ -156,41 +317,30 @@ namespace AcMgdLib.Runtime
          return false;
       }
 
-      /// <summary>
-      /// Finds a loaded module matching the specified wildcard filename.
-      /// Returns null if zero or multiple (ambiguous) matches exist.
-      /// 
-      /// The pattern argument must match <em>one and only one</em> loaded module 
-      /// name (case-insensitive) for a successful match. If multiple matches are 
-      /// found, null is returned to indicate ambiguity.
-      /// </summary>
-
-      static ProcessModule FindLoadedModule(string pattern, ProcessModuleCollection modules = null)
+      static bool IsEqual(string a, string b)
       {
-         bool nested = modules is not null;
-         var matches = (modules ??= Process.GetCurrentProcess().Modules)
-             .Cast<ProcessModule>()
-             .Where(m => Utils.WcMatchEx(m.ModuleName, pattern, true));
-
-         if(matches.Skip(1).Any())     ///  Multiple ambiguous matches found.
-            return null;
-
-         if(!nested && !matches.Any())
-         {
-            if(TryReplaceFileVersion(ref pattern))
-            {
-               return FindLoadedModule(pattern, modules);
-            }
-            return null;
-         }
-
-         return matches.FirstOrDefault();
+         if(a == null)
+            return b == null;
+         if(b == null)
+            return false;
+         return string.Equals(a, b, StringComparison.OrdinalIgnoreCase);
       }
 
       static ProcessModule FindLoadedModule(IntPtr handle)
       {
-         return Process.GetCurrentProcess().Modules.Cast<ProcessModule>()
+         var process = Process.GetCurrentProcess();
+         process.Refresh();
+         return process.Modules.Cast<ProcessModule>()
             .FirstOrDefault(m => m.BaseAddress == handle);
+      }
+
+      static ProcessModule FindLoadedModule(string path)
+      {
+         string filename = Path.GetFileName(path);
+         var process = Process.GetCurrentProcess();
+         process.Refresh();
+         return process.Modules.Cast<ProcessModule>()
+            .FirstOrDefault(m => m.ModuleName.Equals(filename, StringComparison.OrdinalIgnoreCase));
       }
 
       static ProcessModule AddLoadedModule(string libraryName, IntPtr handle)
@@ -204,32 +354,6 @@ namespace AcMgdLib.Runtime
          return module;
       }
 
-      static string GetLoadedModuleFilename(string pattern)
-      {
-         return FindLoadedModule(pattern)?.FileName ?? string.Empty;      
-      }
-
-      /// <summary>
-      /// Loaded assemblies are checked to determine if they are 
-      /// framework or AutoCAD assemblies, or dynamically-generated. 
-      /// If so, they are not registered for DllImport resolution.
-      /// </summary>
-
-      static bool IsExempt(Assembly asm)
-      {
-         if(asm is null || asm.IsDynamic)
-            return true;
-         bool result = false;
-         var att = asm.GetCustomAttribute<AssemblyCompanyAttribute>();
-         if(att != null)
-         {
-            string company = att.Company;
-            result = company.StartsWith("Autodesk, Inc")
-               || company.StartsWith("Microsoft Corporation");
-         }
-         return result;
-      }
-
       [Conditional("DEBUG")]
       static void DebugWrite(string msg)
       {
@@ -240,19 +364,19 @@ namespace AcMgdLib.Runtime
       /// Replaces a mismatched release number in a release-dependent 
       /// filename with the current release number of the running product. 
       /// The current release number of the running product is stored in 
-      /// the AcDbVersion variable.
+      /// the acdbVersion variable.
       /// 
       /// For example, given the filename "acdb24.dll", when running on
       /// AutoCAD 2026, this method will replace it with "acdb26.dll".
       /// 
       /// </summary>
-      /// <param name="filename">The original filename, updated in-place 
+      /// <param path="filename">The original filename, updated in-place 
       /// if matched.</param>
       /// <returns>True if a replacement was performed; otherwise, false.</returns>
 
       static bool TryReplaceFileVersion(ref string filename)
       {
-         if(string.IsNullOrWhiteSpace(filename) || AcDbVersion <= 0)
+         if(string.IsNullOrWhiteSpace(filename) || acdbVersion.Value <= 0)
             return false;
 
          ReadOnlySpan<char> span = filename.AsSpan().Trim();
@@ -272,20 +396,21 @@ namespace AcMgdLib.Runtime
             return false;
          }
          filename = $"{filename.Substring(0, dotIndex - 2)}{v1}{v2}{filename.Substring(dotIndex)}";
-         
-
 #if DEBUG
          DebugWrite($"TryReplaceFileVersion({input}) => {filename}");
 #endif
-
          return true;
       }
 
-      static int GetAcDbVersion()
+      public static ProcessModule GetAcDbModule()
       {
-         var module = Process.GetCurrentProcess().Modules
+         return Process.GetCurrentProcess().Modules
              .Cast<ProcessModule>()
-             .FirstOrDefault(m => Utils.WcMatchEx(m.ModuleName, ACDB_DLL, true));
+             .FirstOrDefault(static m => acdbRegEx.IsMatch(m.ModuleName));
+      }
+      static int GetAcDbModuleVersion()
+      {
+         var module = GetAcDbModule();
          if(module != null)
          {
             string moduleName = module.ModuleName;
@@ -295,7 +420,41 @@ namespace AcMgdLib.Runtime
          }
          return 0;
       }
-
-
    }
+
+
+   internal static class NativeMethods
+   {
+      internal static bool Matches(this string str, string pattern, bool ignoreCase = true)
+      {
+         if(string.IsNullOrWhiteSpace(str) || string.IsNullOrWhiteSpace(pattern))
+            return false;
+         return acutWcMatchEx(str, pattern, ignoreCase);
+      }
+
+      /// <summary>
+      /// 
+      /// Because we want this library to be usable within 
+      /// AutoCAD Core Console, we P/Invoke acutWcmatchEx() 
+      /// directly rather than use Autodesk.AutoCAD.Internal.Utils, 
+      /// to avoid a dependence on AcMgd.dll.
+      /// 
+      /// Note that because it uses a wildcard dllName, this import 
+      /// is a first-class consumer of this library as well.
+      /// 
+      /// </summary>
+
+      [DllImport("acdb2#.dll", 
+         EntryPoint = "?acutWcMatchEx@@YA_NPEB_W0_N@Z",
+         CallingConvention = CallingConvention.Cdecl,
+         CharSet = CharSet.Unicode, ExactSpelling = true)]
+      [return: MarshalAs(UnmanagedType.U1)] 
+      internal static extern bool acutWcMatchEx(
+         [MarshalAs(UnmanagedType.LPWStr)] string pattern,
+         [MarshalAs(UnmanagedType.LPWStr)] string text,
+         [MarshalAs(UnmanagedType.U1)] bool ignoreCase);
+   }
+
+
+
 }
