@@ -132,6 +132,6 @@ If multiple .NET assemblies require DllImport resolution, it is highly-recommend
 
 ## AcDbModuleResolver class
 
-In addition to AcNativeLibraryResolver, this repository also includes the AcDbModuleResolver class, which is a lightweight/minimal (and limited implementation) of AcNativeLibraryResolver, that only resolves the module name of the Autodesk database implementation dll (acdbXX.dll).
+In addition to AcNativeLibraryResolver, this repository also includes the AcDbModuleResolver class, which is a lightweight/minimal (and limited) implementation of AcNativeLibraryResolver, that only resolves the module name of the Autodesk database implementation dll (acdbXX.dll).
 
 If your needs are limited to importing and calling APIs in acdbXX.dll, this class provides the same functionality as AcNativeLibraryResolver.
