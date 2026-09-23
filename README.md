@@ -26,6 +26,8 @@ Hence, the dllName argument `"acdb24.dll"` will be replaced with `"acdb25.dll"` 
   
 If the dllName argument is `"acad.exe"`, and the filename of the current process is not `"acad.exe"`, the `"acad.exe"` argument is replaced with the filename of the current process. Hence, `"acad.exe"` is always interpreted as the name of the current process executable, allowing code to be portable across multiple verticals/toolsets that may use different executable names.
 
+AcNativeLibraryResolver was designed to solve one very basic problem relating to importing and calling native APIs in AutoCAD extensions.
+
 ## The Problem:
 
 When using the [DllImport attribute](https://learn.microsoft.com/en-us/dotnet/api/system.runtime.interopservices.dllimportattribute?view=net-10.0) to import a native api, you must *explicitly* specify the name of the dll containing that API. 
