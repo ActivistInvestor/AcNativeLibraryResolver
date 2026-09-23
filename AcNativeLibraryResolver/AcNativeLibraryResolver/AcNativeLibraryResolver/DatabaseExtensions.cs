@@ -61,12 +61,23 @@ namespace AcNativeLibraryResolverTest
             EntryPoint = "?acdbGetDbmod@@YAHPEAVAcDbDatabase@@@Z", 
             CallingConvention = CallingConvention.Cdecl)]
          internal static extern int acdbGetDbmod(IntPtr database);
+
+         /// <summary>
+         /// Indicates if the calling code is running on the main thread.
+         /// </summary>
+         
+         [DllImport("acdb2#.dll", 
+            EntryPoint = "?acdbInMainThread@@YA_NXZ", 
+            CallingConvention = CallingConvention.Cdecl)]
+         [return: MarshalAs(UnmanagedType.U1)]
+         internal static extern bool acdbInMainThread();
+
       }
 
       /// <summary>
       /// Extension method wrappers for the Database class. 
       /// </summary>
-      
+
       public static int SetDbmod(this Database database, int newval)
       {
          return NativeMethods.acdbSetDbmod(Validate(database).UnmanagedObject, newval);
@@ -133,7 +144,7 @@ namespace AcNativeLibraryResolverTest
          
          public void Dispose()
          {
-            if(db != null && db.IsValid())
+            if(db != null && NativeMethods.acdbInMainThread() && db.IsValid())
             {
                NativeMethods.acdbSetDbmod(db.UnmanagedObject, dbmod);
             }
