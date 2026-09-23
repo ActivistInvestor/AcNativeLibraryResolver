@@ -54,18 +54,20 @@ namespace AcMgdLib.Runtime
    {
       const string ACDB_DLL_PATTERN = "acdb2#.dll";
       internal const string ACDB_DLL_TOKEN = "ACDB_DLL";
+      internal const string ACDB_REGEX_PATTERN = @"^acdb\d{2}\.dll$";
       const string ACAD_EXE = "acad.exe";
       static volatile bool initialized;
       static readonly object lockHolder = new object();
-      static readonly Regex acdbRegEx = new Regex(@"^acdb\d{2}(?!\d)", RegexOptions.IgnoreCase | RegexOptions.Compiled);
-      public static int acdbVersion = GetAcDbModuleVersion();
+      static readonly Regex acDbRegex = new Regex(ACDB_REGEX_PATTERN, RegexOptions.IgnoreCase | RegexOptions.Compiled);
+      public static ProcessModule acDbModule;
+      public static int acDbVersion = GetAcDbModuleVersion();
       public static readonly ProcessModule mainModule = Process.GetCurrentProcess().MainModule;
-      public static ProcessModule acdbModule;
-      static string acdbDllName = $"acdb{acdbVersion}.dll";
-      static readonly char v1 = (char)((acdbVersion / 10) % 10 + '0');
-      static readonly char v2 = (char)(acdbVersion % 10 + '0');
+      static string acDbModuleName = $"acdb{acDbVersion}.dll";
+      static readonly char v1 = acDbVersion.ToString()[0]; 
+      static readonly char v2 = acDbVersion.ToString()[1]; 
       static volatile bool resolving = false;
-      ///  Caches module path -> resolved module file path (or empty string for negative/ambiguous matches)
+      
+      ///  Caches module path -> resolved ProcessModule
       static readonly ConcurrentDictionary<string, ProcessModule> modules =
           new ConcurrentDictionary<string, ProcessModule>();
 
@@ -84,8 +86,8 @@ namespace AcMgdLib.Runtime
             initialized = true;
             /// Add commonly-used wildcards matching
             /// acdbXX.dll and acad.exe to cache:
-            AddLoadedModule("acdb2#.dll", acdbModule);
-            AddLoadedModule("acdb##.dll", acdbModule);
+            AddLoadedModule("acdb2#.dll", acDbModule);
+            AddLoadedModule("acdb##.dll", acDbModule);
             AddLoadedModule("acad.exe", mainModule);
             AssemblyLoadContext.Default.ResolvingUnmanagedDll += resolvingUnmanagedDll;
             /// Force loading of acutWcMatchEx() before
@@ -107,7 +109,7 @@ namespace AcMgdLib.Runtime
          /// handle without doing any pattern matching.
          
          if(IsEqual(libraryName, ACDB_DLL_TOKEN))
-            return acdbModule.BaseAddress;
+            return acDbModule.BaseAddress;
 
          if(resolving)
             return IntPtr.Zero;
@@ -140,6 +142,10 @@ namespace AcMgdLib.Runtime
       ///   module filename in the base directory. The wildcard
       ///   is replaced with the matching module's path.
       ///   
+      ///   Wildcard matching aginst unloaded modules is limited
+      ///   to the application base directory (where the process
+      ///   executable is located). Other locations are NOT probed.
+      ///   
       ///   2. Mismatched release-dependent module names.
       ///   
       ///   If the filename in the dllName argument ends with two 
@@ -147,15 +153,17 @@ namespace AcMgdLib.Runtime
       ///   found, the two numeric digits are replaced with those
       ///   of the current product release (e.g., 25, 26, 27, etc). 
       ///   
-      ///   Hence, the dllName argument of "acdb24.dll" will be 
-      ///   replaced with "acdb25.dll" on AutoCAD 2025; "acdb26.dll" 
+      ///   Eg., a dllName argument of "acdb24.dll" will be replaced 
+      ///   with "acdb25.dll" on AutoCAD 2025; or with "acdb26.dll" 
       ///   on AutoCAD 2026, and so on.
       ///   
       ///   3. Non-default executable path.
       ///   
       ///   If the dllName argument is "acad.exe", it always resolves 
       ///   to the current process executable's main module, regardless 
-      ///   of what its filename is.
+      ///   of what its filename is. Importing APIs from acad.exe makes
+      ///   the importing library dependent on it and therefore cannot 
+      ///   be used with accoreconsole.exe.
       ///   
       ///   4. Optimized 'hot-path' for acdbXX.dll
       ///   
@@ -346,7 +354,7 @@ namespace AcMgdLib.Runtime
       /// Replaces a mismatched release number in a release-dependent 
       /// filename with the current release number of the running product. 
       /// The current release number of the running product is stored in 
-      /// the acdbVersion variable.
+      /// the acDbVersion variable.
       /// 
       /// For example, given the filename "acdb24.dll", when running on
       /// AutoCAD 2026, this method will replace it with "acdb26.dll".
@@ -388,14 +396,14 @@ namespace AcMgdLib.Runtime
       {
          return Process.GetCurrentProcess().Modules
              .Cast<ProcessModule>()
-             .FirstOrDefault(static m => acdbRegEx.IsMatch(m.ModuleName));
+             .First(static m => acDbRegex.IsMatch(m.ModuleName));
       }
       static int GetAcDbModuleVersion()
       {
          var module = GetAcDbModule();
          if(module != null)
          {
-            acdbModule = module;
+            acDbModule = module;
             string moduleName = module.ModuleName;
             string versionStr = moduleName.Substring(4, 2);
             if(int.TryParse(versionStr, out int version))
@@ -438,7 +446,6 @@ namespace AcMgdLib.Runtime
          [MarshalAs(UnmanagedType.LPWStr)] string text,
          [MarshalAs(UnmanagedType.U1)] bool ignoreCase);
    }
-
 
 
 }
