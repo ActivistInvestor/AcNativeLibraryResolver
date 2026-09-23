@@ -1,6 +1,6 @@
 ﻿/// AcNativeLibraryResolver.cs  
 /// 
-/// Activist Investor / Tony T
+/// ActivistInvestor / Tony Tanzillo
 /// 
 /// Distributed under the terms of the MIT license
 
