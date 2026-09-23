@@ -60,7 +60,7 @@ namespace AcMgdLib.Runtime
       static readonly Regex acdbRegEx = new Regex(@"^acdb\d{2}(?!\d)", RegexOptions.IgnoreCase | RegexOptions.Compiled);
       public static int acdbVersion = GetAcDbModuleVersion();
       public static readonly ProcessModule mainModule = Process.GetCurrentProcess().MainModule;
-      public static ProcessModule acdbModule = GetAcDbModule();
+      public static ProcessModule acdbModule;
       static string acdbDllName = $"acdb{acdbVersion}.dll";
       static readonly char v1 = (char)((acdbVersion / 10) % 10 + '0');
       static readonly char v2 = (char)(acdbVersion % 10 + '0');
