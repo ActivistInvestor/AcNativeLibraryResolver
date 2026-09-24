@@ -1,8 +1,8 @@
 ﻿### AcNativeLibraryResolver Class
 
-AcNativeLibraryResolver is a utility class that provides a mechanism for dynamically resolving filenames of native libraries containing APIs that are imported and called by managed extensions using the DllImport attribute. 
+AcNativeLibraryResolver is a utility/helper class that performs dynamic resolution of the filenames of native libraries containing APIs that are imported and called by managed extensions using the [DllImport attribute](https://learn.microsoft.com/en-us/dotnet/api/system.runtime.interopservices.dllimportattribute?view=net-10.0). 
 
-The principle objective of using AcNativeLibraryResolver is that it allows you to import and call native AutoCAD APIs that live in DLLs that have release-dependent filenames *without having to hardwire the exact filenames of those DLLs into your code*, thereby making it portable across multiple AutoCAD product releases.
+The principle objective of AcNativeLibraryResolver is to allow you to import and call native AutoCAD APIs that live in DLLs that have *release-dependent filenames* and do so in a way that allows you to *avoid having to hardwire the exact filenames of those DLLs into your code*, thereby making it portable across multiple AutoCAD product releases.
 
 
 ### Prerequisites:
@@ -26,9 +26,11 @@ Hence, the dllName argument `"acdb24.dll"` will be replaced with `"acdb25.dll"` 
   
 If the dllName argument is `"acad.exe"`, and the filename of the current process is not `"acad.exe"`, the `"acad.exe"` argument is replaced with the filename of the current process. Hence, `"acad.exe"` is always interpreted as the name of the current process executable, allowing code to be portable across multiple verticals/toolsets that may use different executable names.
 
-AcNativeLibraryResolver was designed to solve one very basic problem relating to importing and calling native APIs in AutoCAD extensions.
+## Background
 
-## The Problem:
+AcNativeLibraryResolver was designed to solve one fundamental complication associated with importing and calling native APIs in AutoCAD managed extensions, that has been a pain point in AutoCAD plug-in development since the AutoCAD .NET API was introduced over 20 years ago.
+
+### The Problem:
 
 When using the [DllImport attribute](https://learn.microsoft.com/en-us/dotnet/api/system.runtime.interopservices.dllimportattribute?view=net-10.0) to import a native api, you must *explicitly* specify the name of the dll containing that API. 
 
@@ -49,11 +51,11 @@ static extern int acdbSetDbmod(IntPtr database, int newVal);
 
 Nothing more than the above use of [DllImport] makes the assembly that contains it dependent on acdb25.dll (AutoCAD 2025), which means the same assembly cannot be used with other releases of AutoCAD in which the name of that DLL differs.
 
-## The Solution:
+### A Solution:
 
-AcNativeLibraryResolver allows you to specify *wildcard patterns* in the dllName argument of DllImport attributes. When you specify a wildcard as the name of the dll, AcNativeLibraryResolver will attempt to locate a loaded module whose name matches the wildcard pattern, and will replace the pattern with the name of the matching dll. 
+AcNativeLibraryResolver allows you to specify *wildcard patterns* in the dllName argument of DllImport attributes. When you specify a wildcard as the name of the module, AcNativeLibraryResolver will attempt to locate a loaded module whose name matches the wildcard pattern, and will replace the pattern with the name of the matching dll. If it doesn't find a loaded module whose name matches the pattern, it will look for a dll file in the base folder (where the process executable resides) and if a match is found, it loads the module. 
 
-The primiary use case for AcNativeLibraryResolver is calling native APIs that reside in DLLs that have release-dependent filenames.
+The primiary use case for AcNativeLibraryResolver is calling native APIs that reside in DLLs that have *release-dependent filenames*.
 
 The following is a list of common AutoCAD DLLs that have release-dependent names, and the wildcard patterns that can be used to resolve them to the correct file for the AutoCAD release which the code is running on, from AutoCAD 2025 and later. The '#' character in the pattern is a wildcard that matches a single digit, which is the release number of the AutoCAD DLL. Note that the files listed may not be included with all supported releases (AutoCAD 2025 or later).
 
@@ -80,17 +82,17 @@ The following is a list of common AutoCAD DLLs that have release-dependent names
 
 #### A word of caution regarding the use of wildcards: 
 
-Wildcard patterns used in the DllImport attribute's dllName argument must match the name of ***one and only one*** loaded module. If a wildcard pattern matches the names of multiple loaded modules, it is ambiguous and will result in an error (usually a FileNotFoundException). For this reason, one should always use the *most-specific wildcard* possible, which happen to be those listed in the above table. If for example, you used "acdb*.dll" as a wildcard, it will match multiple loaded modules and result in a failure.
+Wildcard patterns used in the DllImport attribute's dllName argument must match the name of ***one and only one*** loaded module. If a wildcard pattern matches the names of multiple loaded modules, it is ambiguous and is treated as an error (usually a DllNotFoundException). For this reason, one should always use the *most-restrictive matching wildcard* possible, which are those listed in the above table. If for example, you used `"acdb*.dll"` as a wildcard, it will match multiple loaded modules and result in a failure.
 
 ## Autonomous mismatched release-dependent DLL filename resolution
 
-In addition to enabling the use of wildcards in the DllImport attribute's dllName argument, AcNativeLibraryResolver will *automatically* recognize and replace mismatched release-dependent dll filenames with the correct filename for the AutoCAD release the code is running on.
+In addition to enabling the use of wildcards in the DllImport attribute's dllName argument, AcNativeLibraryResolver can *automatically* recognize and replace mismatched release-dependent dll filenames with the correct filename for the AutoCAD release the code is running on.
 
 For example, given this:
 
    ```[DllImport("acdb24.dll", ...)]```
    
-When running on any release of AutoCAD (starting with AutoCAD 2025 or later), the dllName argument in the above DllImport attribute is automatically replaced as follows:
+When running on AutoCAD 2025 or any later release, the dllName argument in the above DllImport attribute is *automatically* replaced as follows:
 
    |AutoCAD Release    |Replacement filename|
    |----------------|--------------------------|
@@ -98,7 +100,7 @@ When running on any release of AutoCAD (starting with AutoCAD 2025 or later), th
    |2026|acdb26.dll
    |2027|acdb27.dll
    
-Autonomous release-dependent filename resolution works for any of the above listed AutoCAD dlls having release-dependent names, provided they reside in the same folder where the current process executable (e.g., acad.exe) is located.
+Mismatched release-dependent filename detection & resolution works for any of the above listed AutoCAD dlls having release-dependent names, provided they reside in the same folder where the current process executable (e.g., acad.exe) is located.
 
 
 ### Usage
