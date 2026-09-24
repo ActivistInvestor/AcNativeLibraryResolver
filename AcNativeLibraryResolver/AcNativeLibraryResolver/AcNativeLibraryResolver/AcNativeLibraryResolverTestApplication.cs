@@ -7,10 +7,8 @@
 
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
-using System.Runtime.InteropServices;
 using AcMgdLib.Runtime;
 using Autodesk.AutoCAD.Runtime;
-
 
 
 namespace AcNativeLibraryResolverTest
@@ -53,10 +51,7 @@ namespace AcNativeLibraryResolverTest
       public void Terminate()
       {
       }
-   }
 
-   internal static class ModuleInitializer
-   {
 #pragma warning disable CA2255
       [ModuleInitializer]
 #pragma warning restore CA2255

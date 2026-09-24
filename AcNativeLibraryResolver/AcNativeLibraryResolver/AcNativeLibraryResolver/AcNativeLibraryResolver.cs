@@ -15,13 +15,13 @@
 /// algorithim/rules. In contrast, the SetDllImportResolver callback
 /// is preemptive, and is called before any default probing is done, 
 /// to give the consumer the ability to redirect to a module other than
-/// the one that would be chosen by default probing. Since this is not
+/// the one that would be chosen by default probing. Since that is not
 /// required in this use case, its overhead can be avoided.
 /// 
 /// Automatic mismatched release-dependent filename resolution:
 /// 
 /// When DllImport is used with a dll that does not exist in the current
-/// product, if the filename ends with two numeric digits, those two
+/// product, and the filename ends with two numeric digits, those two
 /// digits are replaced with the year/release number. So for example, 
 /// if "acdb24.dll" is used, and the code is running on AutoCAD 2026,
 /// the dllName will be resolved to "acdb26.dll".
@@ -29,8 +29,8 @@
 /// DllImport from acad.exe:
 /// 
 /// When "acad.exe" is used in a DllImport's dllName, it is replaced
-/// with the name of the current process, allowing portability across
-/// multiple products that may not have the same executable name.
+/// with the name of the current process, enabling portability across
+/// multiple products that may not have the same executable filename.
 /// 
 /// Additional miscellaneous bugs were also resolved.
 
