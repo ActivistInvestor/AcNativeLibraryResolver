@@ -24,7 +24,7 @@ Hence, the dllName argument `"acdb24.dll"` will be replaced with `"acdb25.dll"` 
   
 ### Host executable name resolution:
   
-If the dllName argument is `"acad.exe"`, and the filename of the current process is not `"acad.exe"`, the `"acad.exe"` argument is replaced with the filename of the current process. Hence, `"acad.exe"` is always interpreted as the name of the current process executable, allowing code that imports APIs from it to be portable across multiple product variants that may use different executable names.
+If the dllName argument is `"acad.exe"`, and the filename of the current process is not `"acad.exe"`, the `"acad.exe"` argument is replaced with the filename of the current process. Hence, `"acad.exe"` is always interpreted as the name of the current process executable, allowing code that imports APIs from it to be portable across multiple product variants that may have different executable names.
 
 ## Background
 
