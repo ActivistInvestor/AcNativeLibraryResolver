@@ -15,8 +15,12 @@
 /// algorithim/rules. In contrast, the SetDllImportResolver callback
 /// is preemptive, and is called before any default probing is done, 
 /// to give the consumer the ability to redirect to a module other than
-/// the one that would be chosen by default probing. Since that is not
-/// required in this use case, its overhead can be avoided.
+/// the one that would be chosen by default probing. That resulted in
+/// many superfluous calls to the resolver callback. Since preemptively
+/// redirecting existing dlls is not required in this use case, its 
+/// overhead can be avoided. Note that SetDllImportResolver() can pose 
+/// significant security risks, as it gives any loaded code the means to 
+/// surruptitiously redirect loading of one .DLL to another .DLL.
 /// 
 /// Automatic mismatched release-dependent filename resolution:
 /// 
@@ -24,13 +28,13 @@
 /// product, and the filename ends with two numeric digits, those two
 /// digits are replaced with the year/release number. So for example, 
 /// if "acdb24.dll" is used, and the code is running on AutoCAD 2026,
-/// the dllName will be resolved to "acdb26.dll".
+/// the dllName will resolve to "acdb26.dll".
 /// 
 /// DllImport from acad.exe:
 /// 
 /// When "acad.exe" is used in a DllImport's dllName, it is replaced
 /// with the name of the current process, enabling portability across
-/// multiple products that may not have the same executable filename.
+/// product variants that may not have the same executable filename.
 /// 
 /// Additional miscellaneous bugs were also resolved.
 
@@ -296,7 +300,7 @@ namespace AcMgdLib.Runtime
          if(NativeLibrary.TryLoad(libraryName, asm, null, out handle))
          {
             var m = AddLoadedModule(key, handle);
-            DebugWrite($"{msg} resolved to {m.FileName}");
+            DebugWrite($"{msg} resolved to {m.FileName.FormatPath()}");
             return true;
          }
          return false;
@@ -387,17 +391,22 @@ namespace AcMgdLib.Runtime
          }
          filename = $"{filename.Substring(0, dotIndex - 2)}{v1}{v2}{filename.Substring(dotIndex)}";
 #if DEBUG
-         DebugWrite($"TryReplaceFileVersion({input}) => {filename}");
+         DebugWrite($"{nameof(TryUpgradeFileVersion)}({input}) => {filename}");
 #endif
          return true;
       }
 
       public static ProcessModule GetAcDbModule()
       {
-         return Process.GetCurrentProcess().Modules
-             .Cast<ProcessModule>()
-             .First(static m => acDbRegex.IsMatch(m.ModuleName));
+         if(acDbModule is null)
+         {
+            acDbModule = Process.GetCurrentProcess().Modules
+                .Cast<ProcessModule>()
+                .First(static m => acDbRegex.IsMatch(m.ModuleName));
+         }
+         return acDbModule;
       }
+
       static int GetAcDbModuleVersion()
       {
          var module = GetAcDbModule();
@@ -410,6 +419,15 @@ namespace AcMgdLib.Runtime
                return version;
          }
          return 0;
+      }
+
+      public static string FormatPath(this string path)
+      {
+         if(Path.IsPathRooted(path))
+         {
+            return $"{Path.GetFileName(path)} in {Path.GetDirectoryName(path)}";
+         }
+         return path;
       }
    }
 
