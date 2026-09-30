@@ -2,6 +2,9 @@
   <Folder Name="/Solution Items/">
     <File Path="Directory.Build.props" />
     <File Path="Directory.Build.targets" />
+    <File Path="README.md" />
   </Folder>
   <Project Path="AcNativeLibraryResolver/AcNativeLibraryResolver.csproj" />
+  <Project Path="AcNativeLibraryResolverTest/AcNativeLibraryResolverTest.csproj" Id="11a939ab-4eb7-4269-997a-7ef519dcdbdb" />
+  <Project Path="UnusedCode/UnusedCode.csproj" Id="e4cb318e-e1fd-405f-a75d-84c2c2c6dd4b" />
 </Solution>

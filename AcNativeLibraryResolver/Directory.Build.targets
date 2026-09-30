@@ -37,17 +37,17 @@
 	To accomodate extensions that are intended to not have a
 	dependence on AutoCAD (e.g., loaded into AcCoreConsole.exe,
 	or another RealDwg host application), You can set the
-	<RealDwgExtension> property to true in your .csproj file. 
+	<RealDwg> property to true in your .csproj file. 
 	If you do that, AcMgd.dll is not referenced.
 	
 	========================================================= 
 	-->
 	<PropertyGroup>
-		<RealDwgExtension Condition="'$(ExecutableName)' == 'accoreconsole.exe'">true</RealDwgExtension>
+		<RealDwg Condition="'$(ExecutableName)' == 'accoreconsole.exe'">true</RealDwg>
 	</PropertyGroup>
 	
 	<ItemGroup>
-		<Reference Include="acmgd" Condition="'$(RealDwgExtension)' != 'true'"> 
+		<Reference Include="acmgd" Condition="'$(RealDwg)' != 'true'"> 
 			<Private>false</Private>
 			<SpecificVersion>false</SpecificVersion>
 		</Reference>
@@ -61,6 +61,52 @@
 		</Reference>
 	</ItemGroup>
 
+	<!-- ========================================================= 
+	Global usings and aliases 
+	
+	
+	Lines with the Alias= attribute only define an alias that
+	is usually only used to disambiguate a type (for example,
+	AcRx.Exception verses System.Exception).
+	
+	Lines without the Alias= attribute define a global using.
+	
+	-->
+	<ItemGroup>
+		<Using Include="Autodesk.AutoCAD.ApplicationServices" />
+		<Using Include="Autodesk.AutoCAD.ApplicationServices" Alias="AcAp"/>
+		<Using Include="Autodesk.AutoCAD.EditorInput"/>
+		<Using Include="Autodesk.AutoCAD.EditorInput" Alias="AcEd"/>
+		<Using Include="Autodesk.AutoCAD.DatabaseServices"/>
+		<Using Include="Autodesk.AutoCAD.DatabaseServices" Alias="AcDb" />
+		<Using Include="Autodesk.AutoCAD.Runtime"/>
+		<Using Include="Autodesk.AutoCAD.Runtime" Alias="AcRx" />
+		<Using Include="Autodesk.AutoCAD.Geometry"/>
+		<Using Include="Autodesk.AutoCAD.Geometry" Alias="AcGe" />
+		<Using Include="Autodesk.AutoCAD.GraphicsInterface"/>
+		<Using Include="Autodesk.AutoCAD.GraphicsInterface" Alias="AcGi" />
+		<Using Include="Autodesk.AutoCAD.Internal"/>
+		<!-- Use only if required as it requires too much
+		     disabiguation between same-named types in other
+			 namespaces.
+		<Using Include="Autodesk.AutoCAD.GraphicsSystem"/>
+		<Using Include="Autodesk.AutoCAD.GraphicsSystem" Alias="AcGs" />
+		-->
+		<Using Include="System.Math" Static="true" />
+	</ItemGroup>
+	
+	<!-- Conditional alias for the Application or Core.Application 
+	class depending on if AcMgd.dll is referenced:
+	When acmgd.dll is not referenced (e.g., $(RealDwg) == true), assign the
+	AcadApp alias to Autodesk.AutoCAD.ApplicationServices.Core.Application.
+	Otherwise, assign it to Autodesk.AutoCAD.ApplicationServices.Application
+	-->
+	<ItemGroup>
+		<Using Include="Autodesk.AutoCAD.ApplicationServices.Core" Condition="'$(RealDwg)' == 'true'"/>
+		<Using Include="Autodesk.AutoCAD.ApplicationServices.Core.Application" Alias="AcadApp" Condition="'$(RealDwg)' == 'true'" />
+		<Using Include="Autodesk.AutoCAD.ApplicationServices.Application" Alias="AcadApp" Condition="'$(RealDwg)' != 'true'" />
+		<Using Include="Autodesk.AutoCAD.ApplicationServices" Condition="'$(RealDwg)' != 'true'" />
+	</ItemGroup>
 
 	<!-- ================================================================= -->
 	<!-- Support for startup .dwg, script file, and command line arguments -->
@@ -70,8 +116,8 @@
 	Supports opening a .dwg file and/or running a .scr file, by adding the
 	needed command line arguments used by launchSettings.json when debugging.
 
-	Both the script file and the .dwg file are optional, and have the hard-
-	coded names "startup.dwg" and "startup.scr". If they exist in the project's
+	Both the script file and the .dwg file are optional, and have the default
+	names "startup.dwg" and "startup.scr". If they exist in the project's
 	root folder, or in a subfolder having the same name as the current target 
 	framework's TFM, the corresponding command line arguments will be added to
 	the command line used to launch AutoCAD when debugging.
@@ -125,24 +171,60 @@
 	<PropertyGroup Condition="'$(TargetFramework)' != ''">
 		<DwgPath></DwgPath>
 		<ScriptPath></ScriptPath>
-
-		<DwgPath Condition="Exists('$(ProjectDir)$(TargetFramework)\startup.dwg')">$(ProjectDir)$(TargetFramework)\startup.dwg</DwgPath>
-		<DwgPath Condition="'$(DwgPath)' == '' And Exists('$(ProjectDir)startup.dwg')">$(ProjectDir)startup.dwg</DwgPath>
-
-		<ScriptPath Condition="Exists('$(ProjectDir)$(TargetFramework)\startup.scr')">$(ProjectDir)$(TargetFramework)\startup.scr</ScriptPath>
-		<ScriptPath Condition="'$(ScriptPath)' == '' And Exists('$(ProjectDir)startup.scr')">$(ProjectDir)startup.scr</ScriptPath>
-
 		<CommandLine></CommandLine>
+
+		<!-- $(DwgPath) can be explicitly assigned in a .csproj file, or a file
+		named startup.dwg can be placed in the root folder of the project, or within
+		a subfulder of the root folder, whose name is the TFM. This allows the use 
+		of different startup.dwg files based on the target framework:
+		
+		  $(ProjectDir)\startup.dwg  is used for all target frameworks
+		  $(ProjectDir)\net10.0-windows\startup.dwg is only used for .net 10 builds
+		  $(ProjectDir)\net8.0-windows\startup.dwg is only used for .net 8 builds.
+		  
+		-->
+		
+		<!-- Check for framework-specific file first -->
+		<DwgPath Condition="Exists('$(ProjectDir)$(TargetFramework)\$(StartupDwg)')">
+			$(ProjectDir)$(TargetFramework)\$(StartupDwg)
+		</DwgPath>
+		
+		<!-- Check for default file -->
+		<DwgPath Condition="'$(DwgPath)' == '' And Exists('$(ProjectDir)$(StartupDwg)')">
+			$(ProjectDir)$(StartupDwg)
+		</DwgPath>
+
+		<!-- $(ScriptPath) can be explicitly assigned in a .csproj file, or a file
+		named startup.scr can be placed in the root folder of the project, or within
+		a subfulder of the root folder, whose name is the TFM. This allows the use 
+		of different startup.scr files based on the target framework:
+		
+		  $(ProjectDir)\startup.scr  is used for all target frameworks
+		  $(ProjectDir)\net10.0-windows\startup.scr is only used for .net 10 builds
+		  $(ProjectDir)\net8.0-windows\startup.scr is only used for .net 8 builds.
+		  
+		-->
+		
+		<ScriptPath Condition="Exists('$(ProjectDir)$(TargetFramework)\$(StartupScr)')">
+			$(ProjectDir)$(TargetFramework)\$(StartupScr)
+		</ScriptPath>
+		<ScriptPath Condition="'$(ScriptPath)' == '' And Exists('$(ProjectDir)$(StartupScr)')">
+			$(ProjectDir)$(StartupScr)
+		</ScriptPath>
+
 	</PropertyGroup>
 
+	<!-- Add startup drawing to command line args -->
 	<PropertyGroup Condition="'$(TargetFramework)' != '' And Exists('$(DwgPath)')">
 		<CommandLine>"$(DwgPath)"</CommandLine>
 	</PropertyGroup>
 
+	<!-- Add startup script to command line args -->
 	<PropertyGroup Condition="'$(TargetFramework)' != '' And Exists('$(ScriptPath)')">
 		<CommandLine>$(CommandLine) /b "$(ScriptPath)"</CommandLine>
 	</PropertyGroup>
 
+	<!-- Add /nologo switch to command line args -->
 	<PropertyGroup Condition="'$(TargetFramework)' != ''">
 		<CommandLine>$(CommandLine) /nologo</CommandLine>
 	</PropertyGroup>
@@ -150,7 +232,8 @@
 
 	<!-- ==================================================== -->
 	<!-- Diagnostics / Informational output -->
-	
+	<!-- ==================================================== -->
+
 	<!-- Formatting macros -->
 	<PropertyGroup>
 		<!-- AutoCAD / Framework version -->
@@ -223,7 +306,7 @@
 
 	<Target Name="DebugPaths" BeforeTargets="BeforeBuild">
 		<Message Importance="high" Text="--- ACTIVE TFM: $(TargetFramework) ---" />
-		<Message Importance="high" Text="Checking path: $(ProjectDir)$(TargetFramework)\startup.dwg" />
+		<Message Importance="high" Text="Checking path: $(ProjectDir)$(TargetFramework)\$(StartupDwg)" />
 		<Message Importance="high" Text="Resolved DwgPath: $(DwgPath)" />
 	</Target>
 	

@@ -23,9 +23,13 @@
 	that target .NET 8.0, and the build that targets .NET 10.0 would be used 
 	with the AutoCAD 2025 and 2026 updates that use	.NET 10.0, and AutoCAD 2027.
 	
-	Note that the README.MD file has not been updated to reflect these changes.
+	The .NET 10 updates to AutoCAD 2025 and 2026 also have significant
+	ramifications on launchSettings.json.
 	
-	See Readme.md for prerequisites.
+	Note that the README.MD file linked to below has not been updated to reflect 
+	these changes.
+	
+	See https://github.com/ActivistInvestor/AcadMultiTargetExample for prerequisites.
 	
 	This file requires some or all of the 
 	following environment variables to be defined:
@@ -33,6 +37,10 @@
 	AC_NET_4_REF_PATH   (Path to reference assemblies for .NET 4.x / AutoCAD 2020-2024)
 	AC_NET_8_REF_PATH   (Path to reference assemblies for .NET 8.0 / AutoCAD 2025 & 2026)
 	AC_NET_10_REF_PATH  (Path to reference assemblies for .NET 10.0 / AutoCAD 2027+)
+	
+	AC_NET_4_EXE_PATH   (Path to install location of AutoCAD 2020-2024)
+	AC_NET_8_EXE_PATH   (Path to install location of AutoCAD 2025 or 2026)
+	AC_NET_10_EXE_PATH  (Path to install location of AutoCAD 2027)
 	
 	Each of the above variables only need to be defined if you 
 	are targeting the associated framework version. 
@@ -78,6 +86,16 @@
 		<ExecutableName>acad.exe</ExecutableName>
 	</PropertyGroup>
 
+	<PropertyGroup>
+		<PlatformTarget>x64</PlatformTarget>
+	</PropertyGroup>
+	
+	<!-- Default startup dwg and scr filenames -->
+	<PropertyGroup>
+		<StartupDwg>startup.dwg</StartupDwg>
+		<StartupScr>startup.scr</StartupScr>
+	</PropertyGroup>
+
 	<!-- Framework / AutoCAD mapping       
 	
 	Defines $(AcReferencePath) and other framework-specific properties 
@@ -99,10 +117,12 @@
 				<FrameworkMajorVer>4</FrameworkMajorVer>
 				<_Ver>4</_Ver>
 				<DefineConstants>$(DefineConstants);AUTOCAD_2020_OR_GREATER</DefineConstants>
-				<PlatformTarget>x64</PlatformTarget>
+				<!-- Binding Redirects apply to .NET Framework Only -->
+				<AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
+				<GenerateBindingRedirectsOutputType>true</GenerateBindingRedirectsOutputType>
+				<CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
 			</PropertyGroup>
 		</When>
-
 		<When Condition="'$(TargetFramework)' != '' And $(TargetFramework.StartsWith('net8'))">
 			<PropertyGroup Condition="Exists('$(AC_NET_8_REF_PATH)')">
 				<AcReferencePath>$(AC_NET_8_REF_PATH)</AcReferencePath>
@@ -111,7 +131,6 @@
 				<FrameworkMajorVer>8</FrameworkMajorVer>
 				<_Ver>8</_Ver>
 				<DefineConstants>$(DefineConstants);AUTOCAD_2020_OR_GREATER;AUTOCAD_2025_OR_GREATER</DefineConstants>
-				<PlatformTarget>x64</PlatformTarget>
 			</PropertyGroup>
 		</When>
 
@@ -123,8 +142,8 @@
 				<AcMinVer>2027</AcMinVer>
 				<AcMaxVer>2027</AcMaxVer>
 				<DefineConstants>$(DefineConstants);AUTOCAD_2020_OR_GREATER;AUTOCAD_2025_OR_GREATER;AUTOCAD_2027_OR_GREATER</DefineConstants>
-				<PlatformTarget>x64</PlatformTarget>
 			</PropertyGroup>
 		</When>
 	</Choose>
+
 </Project>
