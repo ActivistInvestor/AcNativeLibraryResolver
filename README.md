@@ -28,11 +28,11 @@ If the dllName argument is `"acad.exe"`, and the filename of the current process
 
 ## Background
 
-AcNativeLibraryResolver was designed to solve a basic problem that complicates importing and calling native APIs in AutoCAD managed extensions, that has existed since the AutoCAD .NET API was introduced over 20 years ago.
+AcNativeLibraryResolver was designed to address a problem that immensely-complicates importing and calling native APIs in AutoCAD managed extensions, one that has existed since the AutoCAD .NET API was introduced over 20 years ago, and for that long, has discouraged developers from using P/Invoke.
 
 ### The Problem:
 
-When using the [DllImport attribute](https://learn.microsoft.com/en-us/dotnet/api/system.runtime.interopservices.dllimportattribute?view=net-10.0) (or the [LibraryImport attribute](https://learn.microsoft.com/en-us/dotnet/api/system.runtime.interopservices.libraryimportattribute?view=net-10.0)) to import a native api, you must *explicitly* specify the name of the library containing that API in the form of a *compile-time constant*:
+When using the [DllImport attribute](https://learn.microsoft.com/en-us/dotnet/api/system.runtime.interopservices.dllimportattribute?view=net-10.0) (or the [LibraryImport attribute](https://learn.microsoft.com/en-us/dotnet/api/system.runtime.interopservices.libraryimportattribute?view=net-10.0)) to import a native api, you must *explicitly* specify the name of the library containing that API as a *compile-time constant*:
 
 ```csharp
 [DllImport("acdb25.dll", 
@@ -50,7 +50,7 @@ Nothing more than the use of the [DllImport] attribute shown above makes the ass
 
 ### A Solution:
 
-AcNativeLibraryResolver allows you to specify *wildcard patterns* in the dllName argument of DllImport attributes. When you specify a wildcard as the name of the module, AcNativeLibraryResolver will attempt to locate a loaded module whose name matches the wildcard pattern, and will replace the pattern with the name of the matching dll. If it doesn't find a loaded module whose name matches the pattern, it will look for a dll file in the base folder (where the process executable resides) and if a match is found, it loads the module. 
+AcNativeLibraryResolver allows you to specify *wildcard patterns* in the dllName argument of DllImport attributes. When you specify a wildcard as the name of the module, AcNativeLibraryResolver will attempt to locate a loaded module whose name matches the wildcard pattern, and will replace the pattern with the name of the matching dll. If it doesn't find a loaded module whose name matches the pattern, it will look for a file in the base folder (where the process executable resides) and if a match is found, it loads the module. 
 
 The primiary use case for AcNativeLibraryResolver is calling native APIs that reside in DLLs that have *release-dependent filenames*.
 
@@ -115,7 +115,7 @@ static extern int acdbSetDbmod(IntPtr database, int newVal);
 
 The only difference between the two examples is the use of the `"acdb2#"` wildcard in the dllName argument of the DllImport attribute. It's just that simple. 
 
-Enabling dynamic resolution of the DllImport attribute's dllName argument only requires a call to the AcNativeLibraryResolver's `Initialize()` method, prior to calling any imported APIs that are marked with the DllImport attribute. The included project contains example/test code with an IExtensionApplication whose Initialize() method calls the AcNativeLibraryResolver's Initialize() method. 
+Enabling dynamic resolution of the DllImport attribute's dllName argument only requires a call to the AcNativeLibraryResolver's `Initialize()` method, prior to calling any imported APIs that are marked with the DllImport attribute. The included project contains example/test code with an `IExtensionApplication` whose `Initialize()` method shows the necessary step. 
 
 ```csharp
 public class MyApplication : IExtensionApplication
@@ -131,10 +131,23 @@ public class MyApplication : IExtensionApplication
 }
 ```
 
-If multiple .NET assemblies require dynamic DllImport  resolution, it is highly-recommended that the AcNativeLibraryResolver be deployed as a separate assembly and be referenced from each assembly that requires its services.
+If multiple .NET assemblies require dynamic DllImport resolution, it is highly-recommended that the AcNativeLibraryResolver be deployed as a separate assembly and be referenced from each assembly that requires its services. The Initialize() method can be called any number of times.
+
+## Supported file types
+
+If a module of any type is already loaded, its module handle will be returned. However, for unloaded modules, implicit loading is limited to .dll files (.dbx files have not been tested). In the shipping base AutoCAD product, there are currently no known .arx/.crx libraries with release-dependent filenames.
 
 ## AcDbModuleResolver class
 
 In addition to AcNativeLibraryResolver, this repository also includes the **AcDbModuleResolver** class, which is a lightweight/minimal (and limited) implementation of AcNativeLibraryResolver, that only resolves the module name of the AutoCAD database implementation dll (acdbXX.dll).
 
 If your needs are limited to importing and calling APIs in acdbXX.dll, this class provides the same functionality as AcNativeLibraryResolver, in a lightwight form.
+
+## DllExportDumper class
+
+The DllExportDumper class implements an AutoCAD command that dumps the signatures and entry points of native APIs exported by any currently-loaded module, matching a specified wildcard pattern. You can specify a wildcard pattern for both the module and the export symbol name. 
+
+This 'bonus' utility (the `DLLEXPORTS` command) is useful for finding exported native APIs contained in *any* loaded module in the process. It is unique in that it can search across all loaded modules, unlike most similar standalone tools (such as Process Informer) that only search within a single module at a time.
+
+*Use with caution* as the output can be quite long when used with less-restrictive wildcards, and can easily overflow the AutoCAD Text Window display buffer. You can also turn on log file output in that case.
+
