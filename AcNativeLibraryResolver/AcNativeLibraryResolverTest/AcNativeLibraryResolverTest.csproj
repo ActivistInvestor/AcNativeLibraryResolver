@@ -8,11 +8,6 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Remove="AcNativeLibraryResolverTest\DllExportSearch - Copy.cs" />
-    <Compile Remove="AcNativeLibraryResolverTest\ExportSearch.cs" />
-  </ItemGroup>
-
-  <ItemGroup>
     <ProjectReference Include="..\AcNativeLibraryResolver\AcNativeLibraryResolver.csproj" />
   </ItemGroup>
 
