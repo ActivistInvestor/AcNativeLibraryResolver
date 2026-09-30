@@ -1,8 +1,7 @@
 /*
-    AcadMultiTargetExample
-    ActivistInvestor / Tony Tanzillo
-
     launchSettings.json
+
+    ActivistInvestor / Tony Tanzillo
 
     In order to support the use of this file in a project 
     template that is portable across multiple development
@@ -12,7 +11,8 @@
     variables supporting debugging .NET 4.X, .NET 8.0, and 
     .NET 10.0 builds. The values of these variables must
     be the folder where the AutoCAD executable is located.
-    The path should not have a trailing backslash.
+    The path should not have a trailing backslash or a
+    filename.
 
     The launchSettings.json file uses these environment 
     variables to specify the workingDirectory for each 
@@ -26,14 +26,14 @@
 
     Environment Variable   Description
     ============================================================
-    AC_NET_4_BASE_PATH     Path to the executable to be launched for
-                           debugging .NET 4.X build targets.
+    AC_NET_4_BASE_PATH     Path to the executable to be launched
+                           for debugging .NET 4.X build targets.
 
-    AC_NET_8_BASE_PATH     Path to the executable to be launched for
-                           debugging .NET 8.0 build targets.
+    AC_NET_8_BASE_PATH     Path to the executable to be launched 
+                           for debugging .NET 8.0 build targets.
 
-    AC_NET_10_BASE_PATH    Path to the executable to be launched for
-                           debugging .NET 10.0 build targets.
+    AC_NET_10_BASE_PATH    Path to the executable to be launched
+                           for debugging .NET 10.0 build targets.
 
     For example, if you have AutoCAD 2025 installed in the 
     default product install location and want to debug .NET 8.0 
@@ -41,8 +41,8 @@
     "C:\Program Files\Autodesk\AutoCAD 2025" (or whatever folder 
     the AutoCAD 2025 executable resides in). 
 
-    Do not include a trailing backslash in the path assigned to 
-    these variables.
+    Do not include the executable name or a trailing backslash in 
+    the path assigned to these variables.
 
     You can delete profiles for AutoCAD releases you are not 
     targeting. 
@@ -61,8 +61,8 @@
         project folder, its full path is added to the command 
         line with the /b switch to run the script at startup.
        
-    3. In all cases, the /nologo switch is added to suppress 
-       the AutoCAD splash screen.
+    3.  In all cases, the /nologo switch is added to suppress 
+        the AutoCAD splash screen.
 
     4.  If the $(CommandLineArgs) property is not an empty
         string, its contents is prepended to the command line.
@@ -90,19 +90,22 @@
       "commandName": "Executable",
       "executablePath": ".\\$(ExecutableName)",
       "commandLineArgs": "$(CommandLine)",
-      "workingDirectory": "$(AC_NET_4_BASE_PATH)"},
+      "workingDirectory": "$(AC_NET_4_BASE_PATH)"
+    },
     "AutoCAD 2025/2026 (.NET 8.0)": {
       "framework": "net8.0-windows", // Modify if required for .NET 10.0-based updates
       "commandName": "Executable",
       "executablePath": ".\\$(ExecutableName)",
       "commandLineArgs": "$(CommandLine)",
-      "workingDirectory": "$(AC_NET_8_BASE_PATH)"},
+      "workingDirectory": "$(AC_NET_8_BASE_PATH)"
+    },
     "AutoCAD 2027 (.NET 10.0)": {
       "framework": "net10.0-windows",
       "commandName": "Executable",
       "executablePath": ".\\$(ExecutableName)",
       "commandLineArgs": "$(CommandLine)",
-      "workingDirectory": "$(AC_NET_10_BASE_PATH)"},
+      "workingDirectory": "$(AC_NET_10_BASE_PATH)"
+    },
     "AutoCAD 202X (.NET 10.0)": {
       "framework": "net10.0-windows",
       "commandName": "Executable",
