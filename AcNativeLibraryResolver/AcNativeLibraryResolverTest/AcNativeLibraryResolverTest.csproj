@@ -1,0 +1,19 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+	  <TargetFrameworks>net10.0;net8.0</TargetFrameworks>
+	  <ImplicitUsings>enable</ImplicitUsings>
+	  <Nullable>disable</Nullable>
+	  <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Remove="AcNativeLibraryResolverTest\DllExportSearch - Copy.cs" />
+    <Compile Remove="AcNativeLibraryResolverTest\ExportSearch.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\AcNativeLibraryResolver\AcNativeLibraryResolver.csproj" />
+  </ItemGroup>
+
+</Project>

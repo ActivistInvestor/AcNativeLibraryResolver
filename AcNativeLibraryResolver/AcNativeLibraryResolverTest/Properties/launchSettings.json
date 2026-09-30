@@ -1,0 +1,114 @@
+/*
+    AcadMultiTargetExample
+    ActivistInvestor / Tony Tanzillo
+
+    launchSettings.json
+
+    In order to support the use of this file in a project 
+    template that is portable across multiple development
+    environments, it requires the environment variables 
+    shown below to be set to point to the home directory
+    where the AutoCAD executable resides. There are three
+    variables supporting debugging .NET 4.X, .NET 8.0, and 
+    .NET 10.0 builds. The values of these variables must
+    be the folder where the AutoCAD executable is located.
+    The path should not have a trailing backslash.
+
+    The launchSettings.json file uses these environment 
+    variables to specify the workingDirectory for each 
+    launch profile, and the executablePath is specified 
+    as ".\$(ExecutableName)", which is relative to the 
+    workingDirectory. The $(ExecutableName) property is
+    set in Directory.Build.props to the default value of
+    "acad.exe", but can be overridden by assigning another
+    value within a .csproj file.
+
+
+    Environment Variable   Description
+    ============================================================
+    AC_NET_4_BASE_PATH     Path to the executable to be launched for
+                           debugging .NET 4.X build targets.
+
+    AC_NET_8_BASE_PATH     Path to the executable to be launched for
+                           debugging .NET 8.0 build targets.
+
+    AC_NET_10_BASE_PATH    Path to the executable to be launched for
+                           debugging .NET 10.0 build targets.
+
+    For example, if you have AutoCAD 2025 installed in the 
+    default product install location and want to debug .NET 8.0 
+    builds, you would assign AC_NET_8_BASE_PATH variable to 
+    "C:\Program Files\Autodesk\AutoCAD 2025" (or whatever folder 
+    the AutoCAD 2025 executable resides in). 
+
+    Do not include a trailing backslash in the path assigned to 
+    these variables.
+
+    You can delete profiles for AutoCAD releases you are not 
+    targeting. 
+  
+    Command line arguments:
+  
+    The Directory.Build.targets file in this project template 
+    defines a property named $(CommandLine) that is set to the 
+    following values:
+
+    1.  If a drawing file named "startup.dwg" is found in the 
+        project folder, its full path is added to the command 
+        line as the drawing file to be opened at startup.
+  
+    2.  If a script file named "startup.scr" is found in the
+        project folder, its full path is added to the command 
+        line with the /b switch to run the script at startup.
+       
+    3. In all cases, the /nologo switch is added to suppress 
+       the AutoCAD splash screen.
+
+    4.  If the $(CommandLineArgs) property is not an empty
+        string, its contents is prepended to the command line.
+        The $(CommandLineArgs) build property can be assigned
+        in a .csproj file to specify additional command line
+        arguments and switches.
+
+    The $(CommandLine) build property is specified as the 
+    value of the commandLineArgs attribute in each profile.
+
+    For example, to specify the initial view of the drawing
+    opened at launch to be "PLAN", you can add the following 
+    to your .csproj file:
+
+    <PropertyGroup>
+       <CommandLineArgs>/v PLAN</CommandLineArgs>
+    </PropertyGroup>
+
+*/
+
+{
+  "profiles": {
+    "AutoCAD 2020-2024 (.NET 4.71)": {
+      "framework": "net471",
+      "commandName": "Executable",
+      "executablePath": ".\\$(ExecutableName)",
+      "commandLineArgs": "$(CommandLine)",
+      "workingDirectory": "$(AC_NET_4_BASE_PATH)"},
+    "AutoCAD 2025/2026 (.NET 8.0)": {
+      "framework": "net8.0-windows", // Modify if required for .NET 10.0-based updates
+      "commandName": "Executable",
+      "executablePath": ".\\$(ExecutableName)",
+      "commandLineArgs": "$(CommandLine)",
+      "workingDirectory": "$(AC_NET_8_BASE_PATH)"},
+    "AutoCAD 2027 (.NET 10.0)": {
+      "framework": "net10.0-windows",
+      "commandName": "Executable",
+      "executablePath": ".\\$(ExecutableName)",
+      "commandLineArgs": "$(CommandLine)",
+      "workingDirectory": "$(AC_NET_10_BASE_PATH)"},
+    "AutoCAD 202X (.NET 10.0)": {
+      "framework": "net10.0-windows",
+      "commandName": "Executable",
+      "executablePath": "acad",
+      "commandLineArgs": "$(CommandLine)"
+    }
+
+  }
+}
