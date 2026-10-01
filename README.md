@@ -139,15 +139,15 @@ If a module of any type is already loaded, its module handle will be returned. H
 
 ## AcDbModuleResolver class
 
-In addition to AcNativeLibraryResolver, this repository also includes the **AcDbModuleResolver** class, which is a lightweight/minimal (and limited) implementation of AcNativeLibraryResolver, that only resolves the module name of the AutoCAD database implementation dll (acdbXX.dll).
+In addition to AcNativeLibraryResolver, this repository also includes the **AcDbModuleResolver** class, which is a lightweight/minimal implementation of AcNativeLibraryResolver, that only resolves the module name of the AutoCAD database implementation dll (acdbXX.dll).
 
-If your needs are limited to importing and calling APIs in acdbXX.dll, this class provides the same functionality as AcNativeLibraryResolver, in a lightwight form.
+If your needs are limited to importing and calling APIs in acdbXX.dll, this class provides the same functionality as AcNativeLibraryResolver, in a lightwight package.
 
 ## DllExportDumper class
 
-The DllExportDumper class implements an AutoCAD command that dumps the signatures and entry points of native APIs exported by any currently-loaded module, matching a specified wildcard pattern. You can specify a wildcard pattern for both the module and the export symbol name. 
+The DllExportDumper class implements 2 AutoCAD commands that dump the signatures and entry points of native APIs exported by any currently-loaded module, matching a specified wildcard pattern. You can specify a wildcard pattern for both the module and the export symbol name. 
 
-This 'bonus' utility (the `DLLEXPORTS` command) is useful for finding exported native APIs contained in *any* loaded module in the process. It is unique in that it can search across all loaded modules, unlike most similar standalone tools (such as Process Informer) that only search within a single module at a time.
+This 'bonus' utility is extremely useful for finding exported native APIs contained in *any* loaded module in the process. It is unique in that it can search across all loaded modules, unlike most similar standalone tools (such as Process Informer) that limit the search scope to a single module.
 
-*Use with caution* as the output can be quite long when used with less-restrictive wildcards, and can easily overflow the AutoCAD Text Window display buffer. You can also turn on log file output in that case.
+There are two commands included. The `DLLEXPORTS` command dumps the results to the AutoCAD command line, while the `DLLEXPORTSOUT` command dumps the results to a text file (`AcDllExports.txt`) in the MyDocuments folder and then opens it with the default text editor. The output includes the module name, signature, and entrypoint symbol of each matching export.
 
