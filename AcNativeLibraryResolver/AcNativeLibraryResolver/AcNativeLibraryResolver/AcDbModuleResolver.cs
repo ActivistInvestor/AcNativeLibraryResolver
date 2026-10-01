@@ -6,18 +6,19 @@
 
 /// AcDbModuleResolver Class
 ///
-/// A minimal implementation of AcNativeLibraryResolver 
-/// whose scope is limited to resolving the name of the 
-/// AutoCAD database implementation dll (acdbXX.dll).
+/// AcDbModuleResolver is a minimal, lightweight version
+/// of AcNativeLibraryResolver, whose scope is limited to 
+/// resolving the AutoCAD database implementation library 
+/// (acdbXX.dll).
 /// 
 /// AcDbModuleResolver allows existing assemblies that import
 /// API's from the acdbXX.dll in any AutoCAD Release, to work
-/// on any subsequent AutoCAD release where the name of the
-/// acdbXX.dll file differs, with no changes or recompilation 
-/// needed.
+/// on any other AutoCAD release (AutoCAD 2025 or later), where 
+/// the name of acdbXX.dll differs, with no code changes or 
+/// recompilation needed.
 /// 
 /// This code will resolve DllImport dllName arguments
-/// that reference 'acdb##.dll', where '##' is any two
+/// that reference 'acdb??.dll', where '??' is any two
 /// numeric digits, and resolve it to the name of that
 /// dll for the current product the code is running on.
 /// 
@@ -25,16 +26,17 @@
 /// 
 ///   [DllImport("acdb24.dll", ...)]
 ///  
-/// When the above is run on AutoCAD 2025, the resolver
-/// will return the module handle of acdb25.dll. When run 
-/// on AutoCAD 2026, the resolver returns the handle of
-/// acdb26.dll, and so forth. The dllName argument to the
-/// DllImport attribute can be any string that starts with
-/// 'acdb', followed by any two numeric digits, and it will 
-/// be resolved to the correct module based on the product
-/// release on which the code is running.
+/// When the above is run on AutoCAD 2025, it will be 
+/// resolved to acdb25.dll. When run on AutoCAD 2026, 
+/// it will be resolves to acdb26.dll, and so forth. 
 /// 
-/// The resolution is bi-directional and allows builds that
+/// The dllName argument to the DllImport attribute can be 
+/// any string that starts with 'acdb', followed by any two 
+/// numeric digits, and it will be resolved to the correct 
+/// module based on the product release on which the code 
+/// is running.
+/// 
+/// The resolution is uni-directional and allows builds that
 /// target a given AutoCAD release to also target older 
 /// releases (back to AutoCAD 2025) with no code changes.
 /// 
@@ -54,10 +56,24 @@
 /// being imported and used exist in all targeted releases
 /// and have compatible signatures in all releases.
 /// 
+/// Wildcard support:
+/// 
+/// While AcNativeLibraryResolver fully-supports wildcards
+/// in the dllName argument to the DllImport attribute, this
+/// class provides only limited support for wildcards and is
+/// limited to the use of these specific wildcards:
+/// 
+///    "acdb##.dll"
+///    "acdb2#.dll"
+/// 
+/// Usage:
+/// 
 /// To enable AcDbModuleResolver, you only need to call it's
 /// Initialize() method once, prior to calling any imported
 /// API from acdbXX.dll. Initialize() is usually called from
 /// an IExtensionApplication's Initialize() method.
+/// 
+/// Prerequisites:
 /// 
 /// AcDbModuleResolver requires .NET 8 (AutoCAD 2025) at minimum,
 /// and is not supported on older framework versions or AutoCAD
@@ -72,29 +88,37 @@ namespace AcMgdLib.Runtime
 {
    public static class AcDbModuleResolver
    {
-      internal const string ACDB_DLL_REGEX_PATTERN = @"^acdb\d{2}\.dll$";
+      const string ACDB_DLL_REGEX = @"^acdb\d{2}\.dll$";
 
       /// <summary>
       /// Can be used as the dllName argument to DllImport when importing
       /// from acdbXX.dll. Using this token explicity signals to this code
-      /// that it should return the module handle for the loaded dll.
+      /// that it should return the module handle for the loaded acdbXX.dll.
       /// </summary>
       public const string ACDB_DLL_TOKEN = "ACDB_DLL";
       
+      /// <summary>
+      /// Any value in this set can be used as the dllName argument to
+      /// DllImport. They all resolve to the current acdbXX.dll.
+      /// </summary>
       static readonly HashSet<string> tokens = new HashSet<string>(
          ["acdb##.dll", "acdb2#.dll", ACDB_DLL_TOKEN], StringComparer.OrdinalIgnoreCase);
       
-      static readonly Regex regex = new Regex(ACDB_DLL_REGEX_PATTERN, 
+      static readonly Regex regex = new Regex(ACDB_DLL_REGEX, 
          RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
-      static readonly ProcessModule acdbModule = Process.GetCurrentProcess().Modules
-         .Cast<ProcessModule>()
+      /// <summary>
+      /// The ProcessModule that represents acdbXX.dll
+      /// </summary>
+      static readonly ProcessModule acdbModule = Process.GetCurrentProcess()
+         .Modules.Cast<ProcessModule>()
          .First(static m => regex.IsMatch(m.ModuleName));
 
       public static void Initialize()
       {
-         // dummy method to trigger static constructor
-         // which does the actual initialization.
+         // dummy method that triggers execution
+         // of the static constructor, which does
+         // the actual initialization.
       }
 
       static AcDbModuleResolver()
@@ -112,7 +136,7 @@ namespace AcMgdLib.Runtime
 
          /// Interpret "acad.exe" to imply the name of the current process
          /// executable, allowing consuming code to be used on verticals or
-         /// toolsets that may have a different executable name:
+         /// product variants that may have a different executable name:
          
          if(string.Equals(dllName, "acad.exe", StringComparison.OrdinalIgnoreCase))
             return Process.GetCurrentProcess().MainModule.BaseAddress;
