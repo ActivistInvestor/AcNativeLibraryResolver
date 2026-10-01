@@ -28,12 +28,11 @@ namespace AcMgdLib.DevTools
    /// 
    /// Usage:
    /// 
-   /// Command: DLLEXPORTS
-   ///
-   /// Module pattern<*>: (enter the wildcard pattern for the module name)
-   /// API pattern<*>: (enter the wildcard pattern for the API name)
-   /// Found NN matching export(s),
-   /// Output to Console or File? [Console/File] <Console>: (spedify File or Console)
+   ///   Command: DLLEXPORTS
+   ///   Module pattern<*>: (enter the wildcard pattern for the module name)
+   ///   API pattern<*>: (enter the wildcard pattern for the API name)
+   ///   Found NN matching export(s),
+   ///   Output to Console or File? [Console/File] <Console>: (spedify File or Console)
    /// 
    /// If used with anything-goes wildcards (e.g., "*" ), this command
    /// will dump every API EntryPoint of every loaded module, which can 
@@ -83,10 +82,12 @@ namespace AcMgdLib.DevTools
          PromptKeywordOptions pko = new PromptKeywordOptions("Output to Console or File? [Console/File] <File>: ", "Console File");
          pko.Keywords.Default = matchCount > 100 ? "File" : "Console";
          var pkr = editor.GetKeywords(pko);
-         if(pkr.Status != PromptStatus.OK || pkr.StringResult == "File")
-         {
-            DumpExportsToFile(exports);
-            editor.WriteMessage($"\nExport list written to '{GetExportFilePath()}'.\n");
+         if(pkr.Status != PromptStatus.OK)
+            return;
+         if(pkr.StringResult == "File")
+         { 
+            string file = DumpExportsToFile(exports);
+            editor.WriteMessage($"\nExport list written to '{file}'.\n");
             return;
          }
          if(outputToDebug)
@@ -115,19 +116,19 @@ namespace AcMgdLib.DevTools
          editor.WriteMessage($"\n\nFound {matchCount} matching export(s).\n");
       }
 
-      private static void DumpExportsToFile(IDictionary<ProcessModule, ApiExport[]> exports)
+      private static string DumpExportsToFile(IDictionary<ProcessModule, ApiExport[]> exports)
       {
          int matchCount = exports.Sum(entry => entry.Value.Length);
          var lines = new List<string>();
          string filename = GetExportFilePath();
+         lines.Add($"{filename} - DLLEXPORTS Command Output");
+         lines.Add($"    Module Pattern: {modulePattern}");
+         lines.Add($"    API Pattern: {apiPattern}");
+         lines.Add($"    {matchCount} matching export(s): ");
+         lines.Add("");
          foreach(var entry in exports)
          {
             ProcessModule module = entry.Key;
-            lines.Add($"{filename} - DLLEXPORTS Command Output");
-            lines.Add($"    Module Pattern: {modulePattern}");
-            lines.Add($"    API Pattern: {apiPattern}");
-            lines.Add($"    {matchCount} matching export(s): ");
-            lines.Add("");
             lines.Add($"[Module: {module.ModuleName}]");
             foreach(var export in entry.Value)
                lines.Add($"    [{export.Signature}]  {export.EntryPoint}");
@@ -138,6 +139,7 @@ namespace AcMgdLib.DevTools
          {
             UseShellExecute = true
          });
+         return filename;
       }
       private static string GetExportFilePath()
       {
