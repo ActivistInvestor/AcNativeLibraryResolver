@@ -2,8 +2,9 @@
 
 AcNativeLibraryResolver is a utility/helper class that performs dynamic resolution of the filenames of native libraries containing APIs that are imported and called by managed extensions using the [DllImport attribute](https://learn.microsoft.com/en-us/dotnet/api/system.runtime.interopservices.dllimportattribute?view=net-10.0) or the [LibraryImport attribute](https://learn.microsoft.com/en-us/dotnet/api/system.runtime.interopservices.libraryimportattribute?view=net-10.0).
 
-The principle objective of AcNativeLibraryResolver is to allow you to import and call native AutoCAD APIs that live in DLLs that have *release-dependent filenames* in a way that allows you to *avoid having to hardwire the exact filenames of those DLLs into your code*, thereby allowing the code to be portable across multiple AutoCAD product releases.
+The purpose of AcNativeLibraryResolver is to allow you to import and call native AutoCAD APIs that reside in DLLs that have *release-dependent filenames*, without having to *hard-wire the exact filenames of those DLLs into your source code*. 
 
+By eliminating hard-wired, release-dependent filenames in your source code, you eliminate a dependence on a specific product release, making both the source code and binaries produced from it *portable* across multiple AutoCAD product releases.
 
 ### Prerequisites:
 AcNativeLibraryResolver *requires AutoCAD 2025 and .NET 8.0 or later*. Older AutoCAD releases and framework versions are not supported. The [AcMgdLib](https://github.com/ActivistInvestor/AcMgdLib) repository contains an alternative solution that works on older AutoCAD/Framework versions, but is far-more complicated to use than this solution. See [DllImport.cs](https://github.com/ActivistInvestor/AcMgdLib/blob/main/AcMgdLib/Common/DllImport.cs) & [AcDbNativeMethods.cs](https://github.com/ActivistInvestor/AcMgdLib/blob/main/AcMgdLib/Common/AcDbNativeMethods.cs)
@@ -141,7 +142,7 @@ If a module of any type is already loaded, its module handle will be returned. H
 
 In addition to AcNativeLibraryResolver, this repository also includes the **AcDbModuleResolver** class, which is a lightweight/minimal (and limited) implementation of AcNativeLibraryResolver, that only resolves the module name of the AutoCAD database implementation dll (acdbXX.dll).
 
-If your needs are limited to importing and calling APIs in acdbXX.dll, this class provides the same functionality as AcNativeLibraryResolver, in a lightweight form.
+If your needs are limited to importing and calling APIs in acdbXX.dll, this class provides the same functionality as AcNativeLibraryResolver, in a lightwight form.
 
 ## DllExportDumper class
 
