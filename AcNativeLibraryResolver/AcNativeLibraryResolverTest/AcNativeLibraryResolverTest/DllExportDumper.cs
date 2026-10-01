@@ -11,7 +11,7 @@ using System.Text;
 
 /// This code requires <AllowUnsafeBlocks>true</AllowUnsafeBlocks> 
 
-namespace DllExportDumper
+namespace AcMgdLib.DevTools
 {
    public static class DllExportDumper   
    {
