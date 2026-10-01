@@ -29,14 +29,14 @@ namespace DllExportDumper
       public static void DumpExports()
       {
          Document doc = Application.DocumentManager.MdiActiveDocument;
-         if(doc is null) 
+         if(doc is null)
             return;
          Editor editor = doc.Editor;
-         modulePattern = editor.GetWildcardPattern("\nModule pattern: ", modulePattern ?? "*");
+         modulePattern = editor.GetWildcardPattern("\nModule pattern: ", modulePattern);
          if(modulePattern is null)
             return;
-         apiPattern = editor.GetWildcardPattern("\nAPI Pattern: ", apiPattern ?? "*");
-         if(apiPattern is null) 
+         apiPattern = editor.GetWildcardPattern("\nAPI Pattern: ", apiPattern);
+         if(apiPattern is null)
             return;
          int matchCount = 0;
          if(outputToDebug)
@@ -52,39 +52,38 @@ namespace DllExportDumper
                editor.WriteMessage($"\n{msg}");
          }
 
-         var matchingModules = Process.GetCurrentProcess().Modules
-            .Cast<ProcessModule>()
+         var matchingModules = Process.GetCurrentProcess()
+            .Modules.Cast<ProcessModule>()
             .Where(m => m.ModuleName.Matches(modulePattern));
 
          foreach(ProcessModule module in matchingModules)
          {
-            if(module.ModuleName.Matches(modulePattern))
+            try
             {
-               try
+               var exports = GetExports(module);
+               if(!exports.Any())
+                  continue;   
+               bool flag = false;
+               foreach(string export in exports)
                {
-                  var exports = GetExports(module);
-                  bool nameOutput = false;
-                  foreach(string export in exports)
+                  /// Only match aginst the actual api name, not arguments or return types.
+                  string unmangledName = UnmangleSymbol(export, UNDNAME_NAME_ONLY);
+                  if(unmangledName.Matches(apiPattern))
                   {
-                     // 1. Demangle symbol to name-only FIRST
-                     string unmangledName = UnmangleSymbol(export, UNDNAME_NAME_ONLY);
-                     if(unmangledName.Matches(apiPattern))
+                     if(!flag)
                      {
-                        if(!nameOutput)
-                        {
-                           nameOutput = true;
-                           Write($"[Module: {module.ModuleName}]");
-                        }
-                        unmangledName = UnmangleSymbol(export, outputFlags);
-                        Write($"    [{unmangledName}]  {export}");
-                        ++matchCount;
+                        flag = true;
+                        Write($"[Module: {module.ModuleName}]");
                      }
+                     unmangledName = UnmangleSymbol(export, outputFlags);
+                     Write($"    [{unmangledName}]  {export}");
+                     ++matchCount;
                   }
                }
-               catch(System.Exception ex)
-               {
-                  Debug.WriteLine($"Exception accessing {module.ModuleName}: {ex.ToString()}");
-               }
+            }
+            catch(System.Exception ex)
+            {
+               Debug.WriteLine($"Exception accessing {module.ModuleName}: {ex.ToString()}");
             }
          }
          editor.WriteMessage($"\n\nFound {matchCount} matching export(s).\n");
@@ -94,11 +93,9 @@ namespace DllExportDumper
       {
          PromptStringOptions psr = new PromptStringOptions(prompt);
          psr.AllowSpaces = false;
-         if(!string.IsNullOrEmpty(defaultValue))
-         {
-            psr.DefaultValue = defaultValue;
-            psr.UseDefaultValue = true;
-         }
+         defaultValue ??= "*";
+         psr.DefaultValue = defaultValue;
+         psr.UseDefaultValue = true;
          var pr = ed.GetString(psr);
          if(pr.Status != PromptStatus.OK)
             return null;
@@ -111,12 +108,12 @@ namespace DllExportDumper
       {
          return Process.GetCurrentProcess().Modules
             .Cast<ProcessModule>()
-            .FirstOrDefault(m => m.ModuleName.Matches(pattern)) != null; 
+            .Any(m => m.ModuleName.Matches(pattern)); 
       }
 
       static bool Matches(this string input, string pattern, bool ignoreCase = true)
       {
-         if(string.IsNullOrWhiteSpace(pattern))
+         if(string.IsNullOrWhiteSpace(pattern) || pattern == "*")
             return true;
          return Utils.WcMatchEx(input, pattern, ignoreCase);
       }
@@ -170,8 +167,8 @@ namespace DllExportDumper
             if(exportDataDirRva == 0 || exportDataDirSize == 0)
                return exports;
             byte* exportDir = basePtr + exportDataDirRva;
-            uint numberOfNames = *(uint*)(exportDir + 0x18);     // Offset 0x18: NumberOfNames
-            uint addressOfNamesRva = *(uint*)(exportDir + 0x20);  // Offset 0x20: AddressOfNames RVA
+            uint numberOfNames = *(uint*)(exportDir + 0x18);     
+            uint addressOfNamesRva = *(uint*)(exportDir + 0x20); 
             if(numberOfNames == 0 || addressOfNamesRva == 0)
                return exports;
             uint* namesRvaTable = (uint*)(basePtr + addressOfNamesRva);
@@ -199,12 +196,10 @@ namespace DllExportDumper
       private const uint UNDNAME_NO_ACCESS_SPECIFIERS = 0x0080;
       private const uint UNDNAME_NO_MEMBER_TYPE = 0x0200;
 
-      #region PE Structural Layouts
-
       [StructLayout(LayoutKind.Sequential)]
       private struct IMAGE_DOS_HEADER
       {
-         public ushort e_magic;    // Magic number ("MZ")
+         public ushort e_magic;
          public ushort e_cblp;
          public ushort e_cp;
          public ushort e_crlc;
@@ -224,7 +219,7 @@ namespace DllExportDumper
          public ushort e_oeminfo;
          [MarshalAs(UnmanagedType.ByValArray, SizeConst = 10)]
          public ushort[] e_res2;
-         public int e_lfanew;       // File address of new exe header
+         public int e_lfanew;   
       }
 
       [StructLayout(LayoutKind.Sequential)]
@@ -286,8 +281,6 @@ namespace DllExportDumper
          public ulong SizeOfHeapCommit;
          public uint LoaderFlags;
          public uint NumberOfRvaAndSizes;
-
-         // First Data Directory Entry (Exports)
          public IMAGE_DATA_DIRECTORY DataDirectory0;
       }
 
@@ -302,11 +295,9 @@ namespace DllExportDumper
          public uint Base;
          public uint NumberOfFunctions;
          public uint NumberOfNames;
-         public uint AddressOfFunctions;     // RVA from base
-         public uint AddressOfNames;         // RVA from base
-         public uint AddressOfNameOrdinals;  // RVA from base
+         public uint AddressOfFunctions;
+         public uint AddressOfNames;
+         public uint AddressOfNameOrdinals;
       }
-
-      #endregion
    }
 }
