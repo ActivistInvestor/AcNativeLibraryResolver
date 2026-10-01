@@ -6,6 +6,7 @@
 /// Distributed under the terms of the MIT license
 
 using System.Diagnostics;
+using System.Reflection.PortableExecutable;
 using System.Runtime.InteropServices;
 using System.Text;
 
@@ -14,27 +15,32 @@ using System.Text;
 namespace AcMgdLib.DevTools
 {
    /// <summary>
-   /// Implements commands that dump the native API exports of all 
-   /// loaded modules, filtered by module name and/or API name.
+   /// Implements the DLLEXPORTS command that dumps the native API 
+   /// exports of all loaded modules, filtered by module name and/or 
+   /// API name.
    /// 
-   /// These commands search every loaded module whose name matches 
+   /// Results can be displayed on the AutoCAD console, a debug console, 
+   /// or can be output to a text file.
+   /// 
+   /// This command searches every loaded module whose name matches 
    /// the specified module pattern, and lists all of the API exports 
-   /// whose unmangled names match the specified API pattern.
+   /// whose signatures match the specified API pattern.
    /// 
-   /// Commands: 
+   /// Usage:
    /// 
-   ///   DLLEXPORTS - Dumps matching exports to the AutoCAD 
-   ///   console or debug console.
-   ///   
-   ///   DLLEXPORTSOUT - Dumps matching exports to a text file 
-   ///   and opens it with the default text editor.
+   /// Command: DLLEXPORTS
+   ///
+   /// Module pattern<*>: (enter the wildcard pattern for the module name)
+   /// API pattern<*>: (enter the wildcard pattern for the API name)
+   /// Found NN matching export(s),
+   /// Output to Console or File? [Console/File] <Console>: (spedify File or Console)
    /// 
-   /// If used with anything-goes wildcards (e.g., "*" ), these commands 
-   /// will dump every API entryPoint of every loaded module, which can be 
-   /// extremely lengthy, and will overflow AutoCAD's console output
-   /// buffer. It is strongly recommended that one use DLLEXPORTSOUT 
-   /// for large results, or use the module and API pattern arguments 
-   /// with wildcards that restrict output to a limited set of APIs.
+   /// If used with anything-goes wildcards (e.g., "*" ), this command
+   /// will dump every API EntryPoint of every loaded module, which can 
+   /// be extremely lengthy, and will overflow AutoCAD's console output
+   /// buffer. It is strongly recommended that you specify output to File 
+   /// for large results, or use a module and API pattern that restrict 
+   /// output to a limited set of APIs.
    /// </summary>
 
    public static class DllExportDumper   
@@ -43,7 +49,7 @@ namespace AcMgdLib.DevTools
       /// To redirect output to the debug console, rather than 
       /// the AutoCAD console, set this to true:
       /// </summary>
-      static bool outputToDebug = ModuleIsLoaded("AcMgdLib.dll");
+      static bool outputToDebug = false;
       const string outputFilePath = "AcDllExports.txt";
       static string modulePattern = "*";
       static string apiPattern = "*";
@@ -51,10 +57,8 @@ namespace AcMgdLib.DevTools
          | UNDNAME_NO_ALLOCATION_MODEL | UNDNAME_NO_MS_KEYWORDS;
 
       /// <summary>
-      /// Dumps matching entryPoint records to the AutoCAD console or debug console.
-      /// Suitable for limited results, but will overflow the AutoCAD console buffer 
-      /// if used with wildcards that match a large number of exports. See the
-      /// DLLEXPORTSOUT command for a more suitable option for large results.
+      /// Dumps matching API exports to the AutoCAD console, a debug console,
+      /// or a file named 'AcDllExports.txt' in the user's Documents folder. 
       /// </summary>
 
       [CommandMethod("DLLEXPORTS")]
@@ -66,28 +70,37 @@ namespace AcMgdLib.DevTools
          Editor editor = doc.Editor;
          if(!editor.GetWildcard(ref modulePattern, "\nModule pattern: "))
             return;
-         if(!editor.GetWildcard(ref apiPattern, "\nAPI Pattern: "))
+         if(!editor.GetWildcard(ref apiPattern, "\nAPI pattern: "))
             return;
-         int matchCount = 0;
          var exports = GetExportsMatching(modulePattern, apiPattern);
+         int matchCount = exports.Sum(entry => entry.Value.Length);
          if(exports.Count == 0)
          {
             editor.WriteMessage($"\nNo matching exports found for module/api patterns '{modulePattern}'/'{apiPattern}'.\n");
             return;
-         }  
+         }
+         editor.WriteMessage($"\nFound {matchCount} matching export(s) for module/api patterns '{modulePattern}'/'{apiPattern}',\n");
+         PromptKeywordOptions pko = new PromptKeywordOptions("Output to Console or File? [Console/File] <File>: ", "Console File");
+         pko.Keywords.Default = matchCount > 100 ? "File" : "Console";
+         var pkr = editor.GetKeywords(pko);
+         if(pkr.Status != PromptStatus.OK || pkr.StringResult == "File")
+         {
+            DumpExportsToFile(exports);
+            editor.WriteMessage($"\nExport list written to '{GetExportFilePath()}'.\n");
+            return;
+         }
          if(outputToDebug)
             Debug.WriteLine("$(CLEAR)"); // Supported only by a custom trace listener (not included)
          else
             Application.DisplayTextScreen = true;
-         matchCount = exports.Sum(entry => entry.Value.Length);
          foreach(var entry in exports)
          {
             ProcessModule module = entry.Key;
-            ModuleExport[] moduleExports = entry.Value;
+            ApiExport[] moduleExports = entry.Value;
             Write($"[Module: {module.ModuleName}]");
             foreach(var export in moduleExports)
             {
-               Write($"    [{export.UnmangledName}]  {export.EntryPoint}");
+               Write($"    [{export.Signature}]  {export.EntryPoint}");
             }
          }
 
@@ -102,50 +115,30 @@ namespace AcMgdLib.DevTools
          editor.WriteMessage($"\n\nFound {matchCount} matching export(s).\n");
       }
 
-      /// <summary>
-      /// Writes results to a text file in the user's MyDocuments folder,
-      /// rather than the AutoCAD console or debug console, and opens the
-      /// file with the default text editor. This is suitable for large
-      /// results that would overflow the AutoCAD console buffer. 
-      /// </summary>
-
-      [CommandMethod("DLLEXPORTSOUT")]
-      public static void DumpExportsToFile()
+      private static void DumpExportsToFile(IDictionary<ProcessModule, ApiExport[]> exports)
       {
-          Document doc = Application.DocumentManager.MdiActiveDocument;
-          Editor editor = doc.Editor;
-          if(!editor.GetWildcard(ref modulePattern, "\nModule pattern: "))
-             return;
-          if(!editor.GetWildcard(ref apiPattern, "\nAPI Pattern: "))
-             return;
-          var exports = GetExportsMatching(modulePattern, apiPattern);
-          if(exports.Count == 0)
-          {
-             editor.WriteMessage($"\nNo matching exports found for module/api patterns '{modulePattern}'/'{apiPattern}'.\n");
-             return;
-          }
-          int matchCount = exports.Sum(entry => entry.Value.Length);
-          var lines = new List<string>();
-          foreach(var entry in exports)
-          {
-             ProcessModule module = entry.Key;
-             lines.Add($"[Module: {module.ModuleName}]");
-             foreach(var export in entry.Value)
-             {
-                lines.Add($"    [{export.UnmangledName}]  {export.EntryPoint}");
-             }
-          }
-
-          string fileName = GetExportFilePath();
-          Directory.CreateDirectory(Path.GetDirectoryName(fileName)!);
-          File.WriteAllLines(fileName, lines.Count > 0 ? lines : new[] { "No matching exports found." });
-          Process.Start(new ProcessStartInfo(fileName)
-          {
-             UseShellExecute = true
-          });
-          editor.WriteMessage($"\n\nWrote {matchCount} matching export(s) to {fileName}.\n");
-       }
-
+         int matchCount = exports.Sum(entry => entry.Value.Length);
+         var lines = new List<string>();
+         string filename = GetExportFilePath();
+         foreach(var entry in exports)
+         {
+            ProcessModule module = entry.Key;
+            lines.Add($"{filename} - DLLEXPORTS Command Output");
+            lines.Add($"    Module Pattern: {modulePattern}");
+            lines.Add($"    API Pattern: {apiPattern}");
+            lines.Add($"    {matchCount} matching export(s): ");
+            lines.Add("");
+            lines.Add($"[Module: {module.ModuleName}]");
+            foreach(var export in entry.Value)
+               lines.Add($"    [{export.Signature}]  {export.EntryPoint}");
+         }
+         Directory.CreateDirectory(Path.GetDirectoryName(filename));
+         File.WriteAllLines(filename, lines.Count > 0 ? lines : new[] { "No matching exports found." });
+         Process.Start(new ProcessStartInfo(filename)
+         {
+            UseShellExecute = true
+         });
+      }
       private static string GetExportFilePath()
       {
           string documentsFolder = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
@@ -258,11 +251,11 @@ namespace AcMgdLib.DevTools
          return exports;
       }
 
-      public record ModuleExport(string EntryPoint, string UnmangledName);
+      public record ApiExport(string EntryPoint, string Signature);
 
-      public static IDictionary<ProcessModule, ModuleExport[]> GetExportsMatching(string modulePattern = "*", string apiPattern = "*")
+      public static IDictionary<ProcessModule, ApiExport[]> GetExportsMatching(string modulePattern = "*", string apiPattern = "*")
       {
-         var result = new Dictionary<ProcessModule, ModuleExport[]>();
+         var result = new Dictionary<ProcessModule, ApiExport[]>();
          var matchingModules = Process.GetCurrentProcess()
             .Modules.Cast<ProcessModule>()
             .Where(m => m.ModuleName.Matches(modulePattern));
@@ -270,9 +263,9 @@ namespace AcMgdLib.DevTools
          {
             var exports = GetExports(module)
                .Where(entryPoint => UnmangleSymbol(entryPoint, UNDNAME_NAME_ONLY).Matches(apiPattern))
-               .Select(entryPoint => new ModuleExport(entryPoint, UnmangleSymbol(entryPoint)))
+               .Select(entryPoint => new ApiExport(entryPoint, UnmangleSymbol(entryPoint)))
                .ToArray();
-            if(exports.Any())
+            if(exports.Length > 0)
             {
                result[module] = exports;
             }
