@@ -141,7 +141,7 @@ If a module of any type is already loaded, its module handle will be returned. H
 
 In addition to AcNativeLibraryResolver, this repository also includes the **AcDbModuleResolver** class, which is a lightweight/minimal (and limited) implementation of AcNativeLibraryResolver, that only resolves the module name of the AutoCAD database implementation dll (acdbXX.dll).
 
-If your needs are limited to importing and calling APIs in acdbXX.dll, this class provides the same functionality as AcNativeLibraryResolver, in a lightwight form.
+If your needs are limited to importing and calling APIs in acdbXX.dll, this class provides the same functionality as AcNativeLibraryResolver, in a lightweight form.
 
 ## DllExportDumper class
 
