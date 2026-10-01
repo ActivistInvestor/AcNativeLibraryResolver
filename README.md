@@ -145,9 +145,10 @@ If your needs are limited to importing and calling APIs in acdbXX.dll, this clas
 
 ## DllExportDumper class
 
-The DllExportDumper class implements 2 AutoCAD commands that dump the signatures and entry points of native APIs exported by any currently-loaded module, matching a specified wildcard pattern. You can specify a wildcard pattern for both the module and the export symbol name. 
+The DllExportDumper class implements the `DLLEXPORTS` AutoCAD command, that dumps the signatures and entry points of native APIs exported by any currently-loaded module matching a specified wildcard pattern. 
 
-This 'bonus' utility is extremely useful for finding exported native APIs contained in *any* loaded module in the process. It is unique in that it can search across all loaded modules, unlike most similar standalone tools (such as Process Informer) that limit the search scope to a single module.
+You can specify a wildcard pattern for both the module name and the export signature. The command offers the option of outputting the results to the AutoCAD command line, or to a text file in the MyDocuments folder, and opens it with the default text editor. The output includes the module name, signature, and entrypoint symbol of each matching export.
 
-There are two commands included. The `DLLEXPORTS` command dumps the results to the AutoCAD command line, while the `DLLEXPORTSOUT` command dumps the results to a text file (`AcDllExports.txt`) in the MyDocuments folder and then opens it with the default text editor. The output includes the module name, signature, and entrypoint symbol of each matching export.
+This 'bonus' utility is extremely useful for finding exported native APIs contained in *any* loaded module in the process. Due to its embedded nature, it is unique in that it can search across all loaded modules, unlike most similar standalone tools (such as Process Informer) that limit the search scope to a single module.
+
 
