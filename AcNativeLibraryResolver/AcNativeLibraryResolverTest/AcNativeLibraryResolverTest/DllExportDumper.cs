@@ -1,4 +1,4 @@
-﻿
+
 /// DllExportDumper.cs  
 /// 
 /// ActivistInvestor / Tony Tanzillo
@@ -13,17 +13,49 @@ using System.Text;
 
 namespace AcMgdLib.DevTools
 {
+   /// <summary>
+   /// Implements commands that dump the native API exports of all 
+   /// loaded modules, filtered by module name and/or API name.
+   /// 
+   /// These commands search every loaded module whose name matches 
+   /// the specified module pattern, and lists all of the API exports 
+   /// whose unmangled names match the specified API pattern.
+   /// 
+   /// Commands: 
+   /// 
+   ///   DLLEXPORTS - Dumps matching exports to the AutoCAD 
+   ///   console or debug console.
+   ///   
+   ///   DLLEXPORTSOUT - Dumps matching exports to a text file 
+   ///   and opens it with the default text editor.
+   /// 
+   /// If used with anything-goes wildcards (e.g., "*" ), these commands 
+   /// will dump every API entryPoint of every loaded module, which can be 
+   /// extremely lengthy, and will overflow AutoCAD's console output
+   /// buffer. It is strongly recommended that one use DLLEXPORTSOUT 
+   /// for large results, or use the module and API pattern arguments 
+   /// with wildcards that restrict output to a limited set of APIs.
+   /// </summary>
+
    public static class DllExportDumper   
    {
       /// <summary>
-      /// Output can be extremely lengthy. To redirect it to the
-      /// debug console, rather than the AutoCAD console, set this 
-      /// to true:
+      /// To redirect output to the debug console, rather than 
+      /// the AutoCAD console, set this to true:
       /// </summary>
       static bool outputToDebug = ModuleIsLoaded("AcMgdLib.dll");
+      const string outputFilePath = "AcDllExports.txt";
       static string modulePattern = "*";
       static string apiPattern = "*";
-      const uint outputFlags = UNDNAME_NO_THISTYPE | UNDNAME_NO_ACCESS_SPECIFIERS | UNDNAME_NO_MEMBER_TYPE;
+      const uint outputFlags = UNDNAME_NO_ACCESS_SPECIFIERS | UNDNAME_NO_MEMBER_TYPE
+         | UNDNAME_NO_ALLOCATION_MODEL | UNDNAME_NO_MS_KEYWORDS;
+
+      /// <summary>
+      /// Dumps matching entryPoint records to the AutoCAD console or debug console.
+      /// Suitable for limited results, but will overflow the AutoCAD console buffer 
+      /// if used with wildcards that match a large number of exports. See the
+      /// DLLEXPORTSOUT command for a more suitable option for large results.
+      /// </summary>
 
       [CommandMethod("DLLEXPORTS")]
       public static void DumpExports()
@@ -32,17 +64,32 @@ namespace AcMgdLib.DevTools
          if(doc is null)
             return;
          Editor editor = doc.Editor;
-         modulePattern = editor.GetWildcardPattern("\nModule pattern: ", modulePattern);
-         if(modulePattern is null)
+         if(!editor.GetWildcard(ref modulePattern, "\nModule pattern: "))
             return;
-         apiPattern = editor.GetWildcardPattern("\nAPI Pattern: ", apiPattern);
-         if(apiPattern is null)
+         if(!editor.GetWildcard(ref apiPattern, "\nAPI Pattern: "))
             return;
          int matchCount = 0;
+         var exports = GetExportsMatching(modulePattern, apiPattern);
+         if(exports.Count == 0)
+         {
+            editor.WriteMessage($"\nNo matching exports found for module/api patterns '{modulePattern}'/'{apiPattern}'.\n");
+            return;
+         }  
          if(outputToDebug)
             Debug.WriteLine("$(CLEAR)"); // Supported only by a custom trace listener (not included)
          else
             Application.DisplayTextScreen = true;
+         matchCount = exports.Sum(entry => entry.Value.Length);
+         foreach(var entry in exports)
+         {
+            ProcessModule module = entry.Key;
+            ModuleExport[] moduleExports = entry.Value;
+            Write($"[Module: {module.ModuleName}]");
+            foreach(var export in moduleExports)
+            {
+               Write($"    [{export.UnmangledName}]  {export.EntryPoint}");
+            }
+         }
 
          void Write(string msg)
          {
@@ -52,56 +99,77 @@ namespace AcMgdLib.DevTools
                editor.WriteMessage($"\n{msg}");
          }
 
-         var matchingModules = Process.GetCurrentProcess()
-            .Modules.Cast<ProcessModule>()
-            .Where(m => m.ModuleName.Matches(modulePattern));
-
-         foreach(ProcessModule module in matchingModules)
-         {
-            try
-            {
-               var exports = GetExports(module);
-               if(!exports.Any())
-                  continue;   
-               bool flag = false;
-               foreach(string export in exports)
-               {
-                  /// Only match aginst the actual api name, not arguments or return types.
-                  string unmangledName = UnmangleSymbol(export, UNDNAME_NAME_ONLY);
-                  if(unmangledName.Matches(apiPattern))
-                  {
-                     if(!flag)
-                     {
-                        flag = true;
-                        Write($"[Module: {module.ModuleName}]");
-                     }
-                     unmangledName = UnmangleSymbol(export, outputFlags);
-                     Write($"    [{unmangledName}]  {export}");
-                     ++matchCount;
-                  }
-               }
-            }
-            catch(System.Exception ex)
-            {
-               Debug.WriteLine($"Exception accessing {module.ModuleName}: {ex.ToString()}");
-            }
-         }
          editor.WriteMessage($"\n\nFound {matchCount} matching export(s).\n");
       }
 
-      static string GetWildcardPattern(this Editor ed, string prompt = "\nPattern: ", string defaultValue = null)
+      /// <summary>
+      /// Writes results to a text file in the user's MyDocuments folder,
+      /// rather than the AutoCAD console or debug console, and opens the
+      /// file with the default text editor. This is suitable for large
+      /// results that would overflow the AutoCAD console buffer. 
+      /// </summary>
+
+      [CommandMethod("DLLEXPORTSOUT")]
+      public static void DumpExportsToFile()
       {
-         PromptStringOptions psr = new PromptStringOptions(prompt);
-         psr.AllowSpaces = false;
-         defaultValue ??= "*";
-         psr.DefaultValue = defaultValue;
-         psr.UseDefaultValue = true;
-         var pr = ed.GetString(psr);
+          Document doc = Application.DocumentManager.MdiActiveDocument;
+          Editor editor = doc.Editor;
+          if(!editor.GetWildcard(ref modulePattern, "\nModule pattern: "))
+             return;
+          if(!editor.GetWildcard(ref apiPattern, "\nAPI Pattern: "))
+             return;
+          var exports = GetExportsMatching(modulePattern, apiPattern);
+          if(exports.Count == 0)
+          {
+             editor.WriteMessage($"\nNo matching exports found for module/api patterns '{modulePattern}'/'{apiPattern}'.\n");
+             return;
+          }
+          int matchCount = exports.Sum(entry => entry.Value.Length);
+          var lines = new List<string>();
+          foreach(var entry in exports)
+          {
+             ProcessModule module = entry.Key;
+             lines.Add($"[Module: {module.ModuleName}]");
+             foreach(var export in entry.Value)
+             {
+                lines.Add($"    [{export.UnmangledName}]  {export.EntryPoint}");
+             }
+          }
+
+          string fileName = GetExportFilePath();
+          Directory.CreateDirectory(Path.GetDirectoryName(fileName)!);
+          File.WriteAllLines(fileName, lines.Count > 0 ? lines : new[] { "No matching exports found." });
+          Process.Start(new ProcessStartInfo(fileName)
+          {
+             UseShellExecute = true
+          });
+          editor.WriteMessage($"\n\nWrote {matchCount} matching export(s) to {fileName}.\n");
+       }
+
+      private static string GetExportFilePath()
+      {
+          string documentsFolder = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+          if(string.IsNullOrWhiteSpace(documentsFolder))
+             documentsFolder = AppDomain.CurrentDomain.BaseDirectory;
+          return Path.Combine(documentsFolder, outputFilePath);
+      }
+
+
+      static bool GetWildcard(this Editor ed, ref string value, string prompt = "\nPattern: ")
+      {
+         PromptStringOptions pso = new PromptStringOptions(prompt);
+         pso.AllowSpaces = false;
+         value ??= "*";
+         pso.DefaultValue = value;
+         pso.UseDefaultValue = true;
+         var pr = ed.GetString(pso);
          if(pr.Status != PromptStatus.OK)
-            return null;
+            return false;
          if(string.IsNullOrWhiteSpace(pr.StringResult))
-            return "*";
-         return pr.StringResult;
+            value = "*";
+         else 
+            value = pr.StringResult;
+         return true;
       }
 
       static bool ModuleIsLoaded(string pattern)
@@ -125,7 +193,7 @@ namespace AcMgdLib.DevTools
           int maxStringLength,
           uint flags);
       
-      private static string UnmangleSymbol(string mangledName, uint flags)
+      private static string UnmangleSymbol(string mangledName, uint flags = outputFlags)
       {
          if(string.IsNullOrEmpty(mangledName) || !mangledName.StartsWith("?"))
             return mangledName;
@@ -190,11 +258,40 @@ namespace AcMgdLib.DevTools
          return exports;
       }
 
+      public record ModuleExport(string EntryPoint, string UnmangledName);
+
+      public static IDictionary<ProcessModule, ModuleExport[]> GetExportsMatching(string modulePattern = "*", string apiPattern = "*")
+      {
+         var result = new Dictionary<ProcessModule, ModuleExport[]>();
+         var matchingModules = Process.GetCurrentProcess()
+            .Modules.Cast<ProcessModule>()
+            .Where(m => m.ModuleName.Matches(modulePattern));
+         foreach(ProcessModule module in matchingModules)
+         {
+            var exports = GetExports(module)
+               .Where(entryPoint => UnmangleSymbol(entryPoint, UNDNAME_NAME_ONLY).Matches(apiPattern))
+               .Select(entryPoint => new ModuleExport(entryPoint, UnmangleSymbol(entryPoint)))
+               .ToArray();
+            if(exports.Any())
+            {
+               result[module] = exports;
+            }
+         }
+         return result;
+      }
+
+
+      /// <summary>
+      /// UndecorateSymbolName flags
+      /// </summary>
       private const uint UNDNAME_NAME_ONLY = 0x1000;
       private const uint UNDNAME_COMPLETE = 0x0000;
       private const uint UNDNAME_NO_THISTYPE = 0x0060;
       private const uint UNDNAME_NO_ACCESS_SPECIFIERS = 0x0080;
       private const uint UNDNAME_NO_MEMBER_TYPE = 0x0200;
+      private const uint UNDNAME_NO_ALLOCATION_MODEL = 0x0008; 
+      private const uint UNDNAME_NO_MS_KEYWORDS = 0x0002; 
+
 
       [StructLayout(LayoutKind.Sequential)]
       private struct IMAGE_DOS_HEADER
