@@ -28,11 +28,11 @@ namespace AcMgdLib.DevTools
    /// 
    /// Usage:
    /// 
-   ///   Command: DLLEXPORTS
-   ///   Module pattern<*>: (enter the wildcard pattern for the module name)
-   ///   API pattern<*>: (enter the wildcard pattern for the API name)
-   ///   Found NN matching export(s),
-   ///   Output to Console or File? [Console/File] <Console>: (spedify File or Console)
+   ///    Command: DLLEXPORTS
+   ///    Module pattern<*>: (enter a wildcard pattern for the module name)
+   ///    API pattern<*>: (enter a wildcard pattern for the API name)
+   ///    Found NN matching export(s),
+   ///    Output to Console or File? [Console/File] <Console>: (spedify File or Console)
    /// 
    /// If used with anything-goes wildcards (e.g., "*" ), this command
    /// will dump every API EntryPoint of every loaded module, which can 
@@ -48,7 +48,11 @@ namespace AcMgdLib.DevTools
       /// To redirect output to the debug console, rather than 
       /// the AutoCAD console, set this to true:
       /// </summary>
+#if(DEBUG)
+      static bool outputToDebug = true;
+#else
       static bool outputToDebug = false;
+#endif
       const string outputFilePath = "AcDllExports.txt";
       static string modulePattern = "*";
       static string apiPattern = "*";
@@ -72,14 +76,17 @@ namespace AcMgdLib.DevTools
          if(!editor.GetWildcard(ref apiPattern, "\nAPI pattern: "))
             return;
          var exports = GetExportsMatching(modulePattern, apiPattern);
-         int matchCount = exports.Sum(entry => entry.Value.Length);
+         int matchCount = exports.Sum(pair => pair.Value.Length);
+         int moduleCount = exports.Count;
+         editor.WriteMessage("\nModule Pattern: '{0}'\nAPI Pattern: '{1}'\n", modulePattern, apiPattern);
          if(exports.Count == 0)
          {
-            editor.WriteMessage($"\nNo matching exports found for module/api patterns '{modulePattern}'/'{apiPattern}'.\n");
+            editor.WriteMessage($"\nNo matching exports found.");
             return;
          }
-         editor.WriteMessage($"\nFound {matchCount} matching export(s) for module/api patterns '{modulePattern}'/'{apiPattern}',\n");
-         PromptKeywordOptions pko = new PromptKeywordOptions("Output to Console or File? [Console/File] <File>: ", "Console File");
+         editor.WriteMessage($"\nFound {matchCount} matching export(s) in {moduleCount} module(s)");
+         PromptKeywordOptions pko = new PromptKeywordOptions(
+            "\nOutput to [Console/File] <File>: ", "Console File");
          pko.Keywords.Default = matchCount > 100 ? "File" : "Console";
          var pkr = editor.GetKeywords(pko);
          if(pkr.Status != PromptStatus.OK)
@@ -91,7 +98,7 @@ namespace AcMgdLib.DevTools
             return;
          }
          if(outputToDebug)
-            Debug.WriteLine("$(CLEAR)"); // Supported only by a custom trace listener (not included)
+            Debug.WriteLine("$(CLEAR)"); // Supported only by a custom listener (not included)
          else
             Application.DisplayTextScreen = true;
          foreach(var entry in exports)
@@ -118,7 +125,7 @@ namespace AcMgdLib.DevTools
 
       private static string DumpExportsToFile(IDictionary<ProcessModule, ApiExport[]> exports)
       {
-         int matchCount = exports.Sum(entry => entry.Value.Length);
+         int matchCount = exports.Sum(pair => pair.Value.Length);
          var lines = new List<string>();
          string filename = GetExportFilePath();
          lines.Add($"{filename} - DLLEXPORTS Command Output");
@@ -141,6 +148,7 @@ namespace AcMgdLib.DevTools
          });
          return filename;
       }
+
       private static string GetExportFilePath()
       {
           string documentsFolder = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
@@ -148,7 +156,6 @@ namespace AcMgdLib.DevTools
              documentsFolder = AppDomain.CurrentDomain.BaseDirectory;
           return Path.Combine(documentsFolder, outputFilePath);
       }
-
 
       static bool GetWildcard(this Editor ed, ref string value, string prompt = "\nPattern: ")
       {
@@ -223,7 +230,7 @@ namespace AcMgdLib.DevTools
                return exports;
             byte* ntHeaders = basePtr + lfanew;
             uint peSignature = *(uint*)ntHeaders;
-            if(peSignature != 0x00004550) // 'PE\0\0'
+            if(peSignature != 0x00004550) 
                return exports;
             uint exportDataDirRva = *(uint*)(ntHeaders + 0x88);
             uint exportDataDirSize = *(uint*)(ntHeaders + 0x8C);
