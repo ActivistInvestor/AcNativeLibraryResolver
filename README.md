@@ -137,13 +137,13 @@ If multiple .NET assemblies require dynamic DllImport resolution, it is highly-r
 
 If a module of any type is already loaded, its module handle will be returned. However, for unloaded modules, implicit loading is limited to .dll files (.dbx files have not been tested). In the shipping base AutoCAD product, there are currently no known .arx/.crx libraries with release-dependent filenames.
 
-## AcDbModuleResolver class
+## [AcDbModuleResolver class](https://github.com/ActivistInvestor/AcNativeLibraryResolver/blob/main/AcNativeLibraryResolver/AcNativeLibraryResolver/AcNativeLibraryResolver/AcDbModuleResolver.cs)
 
 In addition to AcNativeLibraryResolver, this repository also includes the **AcDbModuleResolver** class, which is a lightweight/minimal implementation of AcNativeLibraryResolver, that only resolves the module name of the AutoCAD database implementation dll (acdbXX.dll).
 
 If your needs are limited to importing and calling APIs in acdbXX.dll, this class provides the same functionality as AcNativeLibraryResolver, in a lightwight package.
 
-## DllExportDumper class
+## [DllExportDumper class](https://github.com/ActivistInvestor/AcNativeLibraryResolver/blob/main/AcNativeLibraryResolver/AcNativeLibraryResolverTest/AcNativeLibraryResolverTest/DllExportDumper.cs)
 
 The DllExportDumper class implements the `DLLEXPORTS` AutoCAD command, which dumps the signatures and entry points of native APIs exported by any currently-loaded module matching a specified wildcard pattern. 
 
