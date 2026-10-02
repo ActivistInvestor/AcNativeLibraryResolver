@@ -28,7 +28,7 @@
 ///  
 /// When the above is run on AutoCAD 2025, it will be 
 /// resolved to acdb25.dll. When run on AutoCAD 2026, 
-/// it will be resolves to acdb26.dll, and so forth. 
+/// it will be resolved to acdb26.dll, and so forth. 
 /// 
 /// The dllName argument to the DllImport attribute can be 
 /// any string that starts with 'acdb', followed by any two 
