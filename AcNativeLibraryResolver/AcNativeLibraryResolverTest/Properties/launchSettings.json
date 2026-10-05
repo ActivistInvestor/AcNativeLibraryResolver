@@ -12,7 +12,10 @@
     .NET 10.0 builds. The values of these variables must
     be the folder where the AutoCAD executable is located.
     The path should not have a trailing backslash or a
-    filename.
+    filename. If you are not targeting a specific AutoCAD 
+    release, you can delete the corresponding profile from 
+    this file, and do not have to define the corresponding 
+    environment variable.
 
     The launchSettings.json file uses these environment 
     variables to specify the workingDirectory for each 
@@ -45,7 +48,7 @@
     the path assigned to these variables.
 
     You can delete profiles for AutoCAD releases you are not 
-    targeting. 
+    targeting and not define the corresponding environment variable. 
   
     Command line arguments:
   
@@ -64,22 +67,22 @@
     3.  In all cases, the /nologo switch is added to suppress 
         the AutoCAD splash screen.
 
-    4.  If the $(CommandLineArgs) property is not an empty
-        string, its contents is prepended to the command line.
-        The $(CommandLineArgs) build property can be assigned
-        in a .csproj file to specify additional command line
-        arguments and switches.
+    4.  If the $(CommandLine) property is not an empty string, 
+        it overrides the default command line that is constructed
+        by the build logic using a startup.dwg and/ or startup.scr 
+        file. Hence, if you define the $(CommandLine) property in
+        a .csproj file, it defines the entire command line to be 
+        used when launching AutoCAD for debugging, regardless of
+        whether a startup.dwg and/or startup.scr file exists in 
+        the project folder.
 
-    The $(CommandLine) build property is specified as the 
-    value of the commandLineArgs attribute in each profile.
+        For example, to specify the initial view of a drawing
+        opened at launch to be "PLAN", you can add the following 
+        to your .csproj file:
 
-    For example, to specify the initial view of the drawing
-    opened at launch to be "PLAN", you can add the following 
-    to your .csproj file:
-
-    <PropertyGroup>
-       <CommandLineArgs>/v PLAN</CommandLineArgs>
-    </PropertyGroup>
+        <PropertyGroup>
+           <CommandLine>MyDrawing.dwg /v PLAN</CommandLine>
+        </PropertyGroup>
 
 */
 
@@ -109,7 +112,7 @@
     "AutoCAD 202X (.NET 10.0)": {
       "framework": "net10.0-windows",
       "commandName": "Executable",
-      "executablePath": "acad",
+      "executablePath": "$(ExecutableName)",
       "commandLineArgs": "$(CommandLine)"
     }
 
