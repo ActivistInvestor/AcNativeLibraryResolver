@@ -36,7 +36,7 @@ namespace AcMgdLib.DevTools
    ///    Found NN matching export(s),
    ///    Output to Console or File? [Console/File] <Console>: (specify File or Console)
    /// 
-   /// If used with anything-goes wildcards (e.g., "*" ), this command
+   /// If used with anything-goes wildcards (ep.g., "*" ), this command
    /// will dump every API EntryPoint of every loaded module, which can 
    /// be extremely lengthy, and will overflow AutoCAD's console output
    /// buffer. It is strongly recommended that you specify output to File 
@@ -72,18 +72,6 @@ namespace AcMgdLib.DevTools
       /// or a file named 'AcDllExports.txt' in the user's Documents folder. 
       /// </summary>
       /// 
-
-      static bool Matches(this string input, string pattern)
-      {
-         pattern = pattern?.Trim() ?? "*";
-         if((pattern == "*" || pattern == "") && regex is null)
-            return true;
-         if(regex is not null)
-            return regex.IsMatch(input);
-         else
-            return Utils.WcMatchEx(input, pattern, true);
-      }
-
 
       [CommandMethod("DLLEXPORTS")]
       public static void DumpExports()
@@ -208,12 +196,17 @@ namespace AcMgdLib.DevTools
             .Any(m => Utils.WcMatchEx(m.ModuleName, pattern, true)); 
       }
 
-      //static bool Matches(this string input, string pattern, bool ignoreCase)
-      //{
-      //   if(string.IsNullOrWhiteSpace(pattern) || pattern == "*")
-      //      return true;
-      //   return Utils.WcMatchEx(input, pattern, ignoreCase);
-      //}
+      static bool Matches(this string input, string pattern)
+      {
+         pattern = pattern?.Trim() ?? "*";
+         if((pattern == "*" || pattern == "") && regex is null)
+            return true;
+         if(regex is not null)
+            return regex.IsMatch(input);
+         else
+            return Utils.WcMatchEx(input, pattern, true);
+      }
+
 
       [DllImport("dbghelp.dll", SetLastError = true, CharSet = CharSet.Ansi)]
       private static extern uint UnDecorateSymbolName(
@@ -241,16 +234,14 @@ namespace AcMgdLib.DevTools
       private static List<string> GetExports(ProcessModule module, string apiPattern)
       {
          List<string> exports = null;
-         if(!Utils.WcMatchEx(module.ModuleName, modulePattern, true))
-            return exports;
          IntPtr hModule = module.BaseAddress;
          if(hModule == IntPtr.Zero)
             return exports;
-         unsafe
+         unsafe 
          {
             byte* basePtr = (byte*)hModule;
             ushort magic = *(ushort*)basePtr;
-            if(magic != 0x5A4D) // 'MZ'
+            if(magic != 0x5A4D) 
                return exports;
             int lfanew = *(int*)(basePtr + 0x3C);
             if(lfanew <= 0 || lfanew > 0x1000)
@@ -301,7 +292,7 @@ namespace AcMgdLib.DevTools
          {
             var exports = GetExports(module, apiPattern);
             if(exports?.Count > 0)
-               result[module] = exports.ConvertAll(e => new ExportRecord(e, UnmangleSymbol(e))).ToList();
+               result[module] = exports.ConvertAll(ep => new ExportRecord(ep, UnmangleSymbol(ep)));
          }
          return result;
       }
