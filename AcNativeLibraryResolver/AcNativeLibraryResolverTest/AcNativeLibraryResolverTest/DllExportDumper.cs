@@ -1,4 +1,3 @@
-
 /// DllExportDumper.cs  
 /// 
 /// ActivistInvestor / Tony Tanzillo
@@ -9,6 +8,7 @@ using System.Diagnostics;
 using System.Reflection.PortableExecutable;
 using System.Runtime.InteropServices;
 using System.Text;
+using System.Text.RegularExpressions;
 
 /// This code requires <AllowUnsafeBlocks>true</AllowUnsafeBlocks> 
 
@@ -20,7 +20,9 @@ namespace AcMgdLib.DevTools
    /// API name.
    /// 
    /// Results can be displayed on the AutoCAD console, a debug console, 
-   /// or can be output to a text file.
+   /// or can be output to a text file named "AcDllExportsResults.txt" 
+   /// in the user's Documents folder. If output to file is chosen, the 
+   /// file is opened in the default text editor after writing.
    /// 
    /// This command searches every loaded module whose name matches 
    /// the specified module pattern, and lists all of the API exports 
@@ -32,7 +34,7 @@ namespace AcMgdLib.DevTools
    ///    Module pattern<*>: (enter a wildcard pattern for the module name)
    ///    API pattern<*>: (enter a wildcard pattern for the API name)
    ///    Found NN matching export(s),
-   ///    Output to Console or File? [Console/File] <Console>: (spedify File or Console)
+   ///    Output to Console or File? [Console/File] <Console>: (specify File or Console)
    /// 
    /// If used with anything-goes wildcards (e.g., "*" ), this command
    /// will dump every API EntryPoint of every loaded module, which can 
@@ -40,6 +42,10 @@ namespace AcMgdLib.DevTools
    /// buffer. It is strongly recommended that you specify output to File 
    /// for large results, or use a module and API pattern that restrict 
    /// output to a limited set of APIs.
+   /// 
+   /// Regular expressions can be used for the API pattern by prefixing
+   /// the pattern with a question mark '?'. The '?' itself is not part 
+   /// of the regex pattern and is removed before compiling.
    /// </summary>
 
    public static class DllExportDumper   
@@ -53,16 +59,31 @@ namespace AcMgdLib.DevTools
 #else
       static bool outputToDebug = false;
 #endif
-      const string outputFilePath = "AcDllExports.txt";
+      const string outputFilePath = "AcDllExportsResults.txt";
       static string modulePattern = "*";
       static string apiPattern = "*";
       const uint outputFlags = UNDNAME_NO_ACCESS_SPECIFIERS | UNDNAME_NO_MEMBER_TYPE
          | UNDNAME_NO_ALLOCATION_MODEL | UNDNAME_NO_MS_KEYWORDS;
 
+      static Regex regex = null;
+
       /// <summary>
       /// Dumps matching API exports to the AutoCAD console, a debug console,
       /// or a file named 'AcDllExports.txt' in the user's Documents folder. 
       /// </summary>
+      /// 
+
+      static bool Matches(this string input, string pattern)
+      {
+         pattern = pattern?.Trim() ?? "*";
+         if((pattern == "*" || pattern == "") && regex is null)
+            return true;
+         if(regex is not null)
+            return regex.IsMatch(input);
+         else
+            return Utils.WcMatchEx(input, pattern, true);
+      }
+
 
       [CommandMethod("DLLEXPORTS")]
       public static void DumpExports()
@@ -75,10 +96,16 @@ namespace AcMgdLib.DevTools
             return;
          if(!editor.GetWildcard(ref apiPattern, "\nAPI pattern: "))
             return;
+         regex = null;
+         if(apiPattern.StartsWith("?") && apiPattern.Length > 1)
+         {
+            apiPattern = apiPattern.Substring(1);
+            regex = new Regex(apiPattern, RegexOptions.IgnoreCase | RegexOptions.Compiled);
+         }
          var exports = GetExportsMatching(modulePattern, apiPattern);
-         int matchCount = exports.Sum(pair => pair.Value.Length);
+         int matchCount = exports.Sum(pair => pair.Value.Count);
          int moduleCount = exports.Count;
-         editor.WriteMessage("\nModule Pattern: '{0}'\nAPI Pattern: '{1}'\n", modulePattern, apiPattern);
+         editor.WriteMessage($"\n  Module Pattern: '{modulePattern}'\n  API Pattern: '{apiPattern}'\n");
          if(exports.Count == 0)
          {
             editor.WriteMessage($"\nNo matching exports found.");
@@ -94,7 +121,7 @@ namespace AcMgdLib.DevTools
          if(pkr.StringResult == "File")
          { 
             string file = DumpExportsToFile(exports);
-            editor.WriteMessage($"\nExport list written to '{file}'.\n");
+            editor.WriteMessage($"\nResults output to '{file}'.\n");
             return;
          }
          if(outputToDebug)
@@ -104,9 +131,9 @@ namespace AcMgdLib.DevTools
          foreach(var entry in exports)
          {
             ProcessModule module = entry.Key;
-            ApiExport[] moduleExports = entry.Value;
+            List<ExportRecord> result = entry.Value;
             Write($"[Module: {module.ModuleName}]");
-            foreach(var export in moduleExports)
+            foreach(var export in result)
             {
                Write($"    [{export.Signature}]  {export.EntryPoint}");
             }
@@ -123,14 +150,14 @@ namespace AcMgdLib.DevTools
          editor.WriteMessage($"\n\nFound {matchCount} matching export(s).\n");
       }
 
-      private static string DumpExportsToFile(IDictionary<ProcessModule, ApiExport[]> exports)
+      private static string DumpExportsToFile(IDictionary<ProcessModule, List<ExportRecord>> exports)
       {
-         int matchCount = exports.Sum(pair => pair.Value.Length);
+         int matchCount = exports.Sum(pair => pair.Value.Count);
          var lines = new List<string>();
          string filename = GetExportFilePath();
          lines.Add($"{filename} - DLLEXPORTS Command Output");
          lines.Add($"    Module Pattern: {modulePattern}");
-         lines.Add($"    API Pattern: {apiPattern}");
+         lines.Add($"    API Pattern:    {apiPattern}");
          lines.Add($"    {matchCount} matching export(s): ");
          lines.Add("");
          foreach(var entry in exports)
@@ -141,7 +168,7 @@ namespace AcMgdLib.DevTools
                lines.Add($"    [{export.Signature}]  {export.EntryPoint}");
          }
          Directory.CreateDirectory(Path.GetDirectoryName(filename));
-         File.WriteAllLines(filename, lines.Count > 0 ? lines : new[] { "No matching exports found." });
+         File.WriteAllLines(filename, lines);
          Process.Start(new ProcessStartInfo(filename)
          {
             UseShellExecute = true
@@ -178,15 +205,15 @@ namespace AcMgdLib.DevTools
       {
          return Process.GetCurrentProcess().Modules
             .Cast<ProcessModule>()
-            .Any(m => m.ModuleName.Matches(pattern)); 
+            .Any(m => Utils.WcMatchEx(m.ModuleName, pattern, true)); 
       }
 
-      static bool Matches(this string input, string pattern, bool ignoreCase = true)
-      {
-         if(string.IsNullOrWhiteSpace(pattern) || pattern == "*")
-            return true;
-         return Utils.WcMatchEx(input, pattern, ignoreCase);
-      }
+      //static bool Matches(this string input, string pattern, bool ignoreCase)
+      //{
+      //   if(string.IsNullOrWhiteSpace(pattern) || pattern == "*")
+      //      return true;
+      //   return Utils.WcMatchEx(input, pattern, ignoreCase);
+      //}
 
       [DllImport("dbghelp.dll", SetLastError = true, CharSet = CharSet.Ansi)]
       private static extern uint UnDecorateSymbolName(
@@ -211,14 +238,14 @@ namespace AcMgdLib.DevTools
          return (result > 0) ? buffer.ToString() : mangledName;
       }
 
-      private static IEnumerable<string> GetExports(ProcessModule module)
+      private static List<string> GetExports(ProcessModule module, string apiPattern)
       {
-         if(!module.ModuleName.Matches(modulePattern))
-            return Enumerable.Empty<string>();
+         List<string> exports = null;
+         if(!Utils.WcMatchEx(module.ModuleName, modulePattern, true))
+            return exports;
          IntPtr hModule = module.BaseAddress;
          if(hModule == IntPtr.Zero)
-            return Enumerable.Empty<string>();
-         List<string> exports = new List<string>();
+            return exports;
          unsafe
          {
             byte* basePtr = (byte*)hModule;
@@ -242,6 +269,7 @@ namespace AcMgdLib.DevTools
             if(numberOfNames == 0 || addressOfNamesRva == 0)
                return exports;
             uint* namesRvaTable = (uint*)(basePtr + addressOfNamesRva);
+            exports = new List<string>();
             for(uint i = 0; i < numberOfNames; i++)
             {
                uint nameRva = namesRvaTable[i];
@@ -249,8 +277,9 @@ namespace AcMgdLib.DevTools
 
                byte* namePtr = basePtr + nameRva;
                string exportName = Marshal.PtrToStringAnsi((IntPtr)namePtr);
+               string unmangledName = UnmangleSymbol(exportName, UNDNAME_NAME_ONLY);
 
-               if(!string.IsNullOrEmpty(exportName))
+               if(!string.IsNullOrEmpty(exportName) && unmangledName.Matches(apiPattern))
                {
                   exports.Add(exportName);
                }
@@ -260,24 +289,19 @@ namespace AcMgdLib.DevTools
          return exports;
       }
 
-      public record ApiExport(string EntryPoint, string Signature);
+      public record ExportRecord(string EntryPoint, string Signature);
 
-      public static IDictionary<ProcessModule, ApiExport[]> GetExportsMatching(string modulePattern = "*", string apiPattern = "*")
+      public static IDictionary<ProcessModule, List<ExportRecord>> GetExportsMatching(string modulePattern = "*", string apiPattern = "*")
       {
-         var result = new Dictionary<ProcessModule, ApiExport[]>();
+         var result = new Dictionary<ProcessModule, List<ExportRecord>>();
          var matchingModules = Process.GetCurrentProcess()
             .Modules.Cast<ProcessModule>()
-            .Where(m => m.ModuleName.Matches(modulePattern));
+            .Where(m => Utils.WcMatchEx(m.ModuleName, modulePattern, true));
          foreach(ProcessModule module in matchingModules)
          {
-            var exports = GetExports(module)
-               .Where(entryPoint => UnmangleSymbol(entryPoint, UNDNAME_NAME_ONLY).Matches(apiPattern))
-               .Select(entryPoint => new ApiExport(entryPoint, UnmangleSymbol(entryPoint)))
-               .ToArray();
-            if(exports.Length > 0)
-            {
-               result[module] = exports;
-            }
+            var exports = GetExports(module, apiPattern);
+            if(exports?.Count > 0)
+               result[module] = exports.ConvertAll(e => new ExportRecord(e, UnmangleSymbol(e))).ToList();
          }
          return result;
       }
