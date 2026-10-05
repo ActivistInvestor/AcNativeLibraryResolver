@@ -1,5 +1,5 @@
 <Project>
-	
+
 	<!-- Directory.Build.targets
 	
 	See Readme.md for prerequisites and full details.
@@ -45,19 +45,19 @@
 	<PropertyGroup>
 		<RealDwg Condition="'$(ExecutableName)' == 'accoreconsole.exe'">true</RealDwg>
 	</PropertyGroup>
-	
+
 	<ItemGroup>
-		<Reference Include="acmgd" Condition="'$(RealDwg)' != 'true'"> 
+		<Reference Include="acmgd" Condition="'$(RealDwg)' != 'true'">
 			<Private>false</Private>
 			<SpecificVersion>false</SpecificVersion>
 		</Reference>
-		<Reference Include="acdbmgd"> 
+		<Reference Include="acdbmgd">
 			<SpecificVersion>false</SpecificVersion>
 			<Private>false</Private>
 		</Reference>
 		<Reference Include="accoremgd">
 			<SpecificVersion>false</SpecificVersion>
-			<Private>false</Private> 
+			<Private>false</Private>
 		</Reference>
 	</ItemGroup>
 
@@ -94,7 +94,7 @@
 		-->
 		<Using Include="System.Math" Static="true" />
 	</ItemGroup>
-	
+
 	<!-- Conditional alias for the Application or Core.Application 
 	class depending on if AcMgd.dll is referenced:
 	When acmgd.dll is not referenced (e.g., $(RealDwg) == true), assign the
@@ -138,97 +138,87 @@
 	
 	-->
 
-	<!--
-	<PropertyGroup Condition="'$(TargetFramework)' != ''">
-		<DwgPath></DwgPath>
-		<ScriptPath></ScriptPath>
-		<CommandLine></CommandLine>
-
-		<DwgPath Condition="Exists('$(ProjectDir)$(TargetFramework)\startup.dwg')">$(ProjectDir)$(TargetFramework)\startup.dwg</DwgPath>
-		<DwgPath Condition="'$(DwgPath)' == '' And Exists('$(ProjectDir)startup.dwg')">$(ProjectDir)startup.dwg</DwgPath>
-
-		<ScriptPath Condition="Exists('$(ProjectDir)$(TargetFramework)\startup.scr')">$(ProjectDir)$(TargetFramework)\startup.scr</ScriptPath>
-		<ScriptPath Condition="'$(ScriptPath)' == '' And Exists('$(ProjectDir)startup.scr')">$(ProjectDir)startup.scr</ScriptPath>
-	</PropertyGroup>
-
-	<PropertyGroup Condition="Exists('$(DwgPath)')">
-		<CommandLine>"$(DwgPath)"</CommandLine>
-	</PropertyGroup>
-
-	<PropertyGroup Condition="Exists('$(ScriptPath)')">
-		<CommandLine>$(CommandLine) /b "$(ScriptPath)"</CommandLine>
-	</PropertyGroup>
-
 	<PropertyGroup>
-		<CommandLine>$(CommandLine) /nologo</CommandLine>
+		<!-- These local properties should not be assigned outside of this file -->
+		<_DwgPath></_DwgPath>
+		<_ScriptPath></_ScriptPath>
+		<_CommandLine></_CommandLine>
 	</PropertyGroup>
 
-	<PropertyGroup Condition="'$(CommandLineArgs)' != ''">
-		<CommandLine>$(CommandLineArgs) $(CommandLine)</CommandLine>
-	</PropertyGroup>	
-	-->
-	
-	<PropertyGroup Condition="'$(TargetFramework)' != ''">
-		<DwgPath></DwgPath>
-		<ScriptPath></ScriptPath>
-		<CommandLine></CommandLine>
+	<!-- Startup Dwg file-->
+	<Choose>
+		<!-- User-defined path to startup dwg file overrides default probing-->
+		<When Condition="'$(DwgPath)' != ''">
+			<PropertyGroup>
+				<_DwgPath>$(DwgPath)</_DwgPath>
+			</PropertyGroup>
+		</When>
+		<!-- Probe for framework-specific startup dwg file -->
+		<When Condition="Exists('$(ProjectDir)$(TargetFramework)\$(StartupDwg)')">
+			<PropertyGroup>
+				<_DwgPath>$(ProjectDir)$(TargetFramework)\$(StartupDwg)</_DwgPath>
+			</PropertyGroup>
+		</When>
+		<!-- Probe for project-wide startup dwg file -->
+		<When Condition="Exists('$(ProjectDir)$(StartupDwg)')">
+			<PropertyGroup>
+				<_DwgPath>$(ProjectDir)$(StartupDwg)</_DwgPath>
+			</PropertyGroup>
+		</When>
+	</Choose>
 
-		<!-- $(DwgPath) can be explicitly assigned in a .csproj file, or a file
-		named startup.dwg can be placed in the root folder of the project, or within
-		a subfulder of the root folder, whose name is the TFM. This allows the use 
-		of different startup.dwg files based on the target framework:
-		
-		  $(ProjectDir)\startup.dwg  is used for all target frameworks
-		  $(ProjectDir)\net10.0-windows\startup.dwg is only used for .net 10 builds
-		  $(ProjectDir)\net8.0-windows\startup.dwg is only used for .net 8 builds.
-		  
-		-->
-		
-		<!-- Check for framework-specific file first -->
-		<DwgPath Condition="Exists('$(ProjectDir)$(TargetFramework)\$(StartupDwg)')">
-			$(ProjectDir)$(TargetFramework)\$(StartupDwg)
-		</DwgPath>
-		
-		<!-- Check for default file -->
-		<DwgPath Condition="'$(DwgPath)' == '' And Exists('$(ProjectDir)$(StartupDwg)')">
-			$(ProjectDir)$(StartupDwg)
-		</DwgPath>
+	<!-- Startup Script file-->
+	<Choose>
+		<!-- User-defined path to startup script file overrides default probing-->
+		<When Condition="'$(ScriptPath)' != ''">
+			<PropertyGroup>
+				<_ScriptPath>$(ScriptPath)</_ScriptPath>
+			</PropertyGroup>
+		</When>
+		<!-- Probe for framework-specific startup script file -->
+		<When Condition="Exists('$(ProjectDir)$(TargetFramework)\$(StartupScr)')">
+			<PropertyGroup>
+				<_ScriptPath>$(ProjectDir)$(TargetFramework)\$(StartupScr)</_ScriptPath>
+			</PropertyGroup>
+		</When>
+		<!-- Probe for project-wide startup script file -->
+		<When Condition="Exists('$(ProjectDir)$(StartupScr)')">
+			<PropertyGroup>
+				<_ScriptPath>$(ProjectDir)$(StartupScr)</_ScriptPath>
+			</PropertyGroup>
+		</When>
+	</Choose>
 
-		<!-- $(ScriptPath) can be explicitly assigned in a .csproj file, or a file
-		named startup.scr can be placed in the root folder of the project, or within
-		a subfulder of the root folder, whose name is the TFM. This allows the use 
-		of different startup.scr files based on the target framework:
-		
-		  $(ProjectDir)\startup.scr  is used for all target frameworks
-		  $(ProjectDir)\net10.0-windows\startup.scr is only used for .net 10 builds
-		  $(ProjectDir)\net8.0-windows\startup.scr is only used for .net 8 builds.
-		  
-		-->
-		
-		<ScriptPath Condition="Exists('$(ProjectDir)$(TargetFramework)\$(StartupScr)')">
-			$(ProjectDir)$(TargetFramework)\$(StartupScr)
-		</ScriptPath>
-		<ScriptPath Condition="'$(ScriptPath)' == '' And Exists('$(ProjectDir)$(StartupScr)')">
-			$(ProjectDir)$(StartupScr)
-		</ScriptPath>
 
+	<Choose>
+		<When Condition="'$(TargetFramework)' != ''">
+			<Choose>
+				<!-- User-specified command line overrides all default processing -->
+				<When Condition="'$(CommandLine)' != ''">
+					<PropertyGroup>
+						<_CommandLine>$(CommandLine)</_CommandLine>
+					</PropertyGroup>
+				</When>
+
+				<!-- Default command line if there is a startup dwg and/or script file found -->
+				<Otherwise>
+					<PropertyGroup Condition="Exists('$(_DwgPath)')">
+						<_CommandLine>"$(_DwgPath) "</_CommandLine>
+					</PropertyGroup>
+					<PropertyGroup Condition="Exists('$(_ScriptPath)')">
+						<_CommandLine>$(_CommandLine) /b "$(_ScriptPath)"</_CommandLine>
+					</PropertyGroup>
+					<PropertyGroup>
+						<_CommandLine>$(_CommandLine) /nologo</_CommandLine>
+					</PropertyGroup>
+				</Otherwise>
+			</Choose>
+		</When>
+	</Choose>
+
+	<PropertyGroup Condition ="$(_CommandLine) != ''">
+		<CommandLine>$(_CommandLine)</CommandLine>
 	</PropertyGroup>
-
-	<!-- Add startup drawing to command line args -->
-	<PropertyGroup Condition="'$(TargetFramework)' != '' And Exists('$(DwgPath)')">
-		<CommandLine>"$(DwgPath)"</CommandLine>
-	</PropertyGroup>
-
-	<!-- Add startup script to command line args -->
-	<PropertyGroup Condition="'$(TargetFramework)' != '' And Exists('$(ScriptPath)')">
-		<CommandLine>$(CommandLine) /b "$(ScriptPath)"</CommandLine>
-	</PropertyGroup>
-
-	<!-- Add /nologo switch to command line args -->
-	<PropertyGroup Condition="'$(TargetFramework)' != ''">
-		<CommandLine>$(CommandLine) /nologo</CommandLine>
-	</PropertyGroup>
-
 
 	<!-- ==================================================== -->
 	<!-- Diagnostics / Informational output -->
@@ -245,20 +235,21 @@
 	<!-- Post-build: display the build target display 
 	name and the path to the AutoCAD reference assemblies 
 	that were used used for the build target.-->
-	
+
 	<Target Name="AfterBuildMessage" AfterTargets="Build">
 		<Message Text="[$(ProjectDisplayName)]: Built target for $(TargetDisplayName) using references from $(AcReferencePath)"
 			Condition="'$(AcReferencePath)' != ''"
-			Importance="high"></Message>
+			Importance="high">
+		</Message>
 	</Target>
 
 	<!-- Displays the command line arguments for debug/diagnostics purposes 
-	To enable, use <DebugCommandLineArgs>true</DebugCommandLineArgs>
+	To enable, use <Debug_CommandLineArgs>true</Debug_CommandLineArgs>
 	in a PropertyGroup within the .csproj file.
 	-->
 
 	<Target Name="AfterBuildMessage2" AfterTargets="Build">
-		<Message Text="[$(ProjectDisplayName)]: Command Line Args: $(CommandLine)"
+		<Message Text="[$(ProjectDisplayName)]: Command Line Args: $(_CommandLine)"
 			Condition="'$(DebugCommandLine)' == 'true'"
 			Importance="high"></Message>
 	</Target>
@@ -284,8 +275,8 @@
 	To enable, use <DebugAssemblySearchPaths>true</DebugAssemblySearchPaths>
 	in a PropertyGroup within a .csproj file.
 	-->
-	
-	<Target Name="DebugAssemblySearchPaths" 
+
+	<Target Name="DebugAssemblySearchPaths"
 			Condition="'$(DebugAssemblySearchPaths)' == 'true'"
 			BeforeTargets="ResolveAssemblyReferences">
 		<Message Text="[$(ProjectDisplayName)]: AssemblySearchPaths: $(AssemblySearchPaths)" Importance="high" />
@@ -297,18 +288,21 @@
 	in a PropertyGroup within .csproj file. Note that this path will also 
 	appear in the list of assembly search paths displayed by the above target.
 	-->
-	
+
 	<Target Name ="DebugAcadReferencePath"
-			Condition="'$(DebugAcadReferencePath)' == 'true'"
+			Condition="'$(DebugAcadReferencePath)' == 'true' And '$(TargetFramework)' != ''"
 			BeforeTargets="ResolveAssemblyReferences">
 		<Message Text="[$(ProjectDisplayName)]: AutoCAD Reference Path: $(AcReferencePath)" Importance="high" />
 	</Target>
 
-	<Target Name="DebugPaths" BeforeTargets="BeforeBuild">
-		<Message Importance="high" Text="--- ACTIVE TFM: $(TargetFramework) ---" />
+	<!-- 
+	<Target Name="DebugPaths" BeforeTargets="BeforeBuild"
+		Condition="'$(DebugPaths)' == 'true' And '$(TargetFramework)' != ''"
+		<Message Importance="high" Text="ACTIVE TFM: $(TargetFramework)" />
 		<Message Importance="high" Text="Checking path: $(ProjectDir)$(TargetFramework)\$(StartupDwg)" />
-		<Message Importance="high" Text="Resolved DwgPath: $(DwgPath)" />
+		<Message Importance="high" Text="Resolved _DwgPath: $(_DwgPath)" />
 	</Target>
-	
-	
+	-->
+
+
 </Project>

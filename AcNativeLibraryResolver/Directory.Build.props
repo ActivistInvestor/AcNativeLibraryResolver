@@ -38,9 +38,9 @@
 	AC_NET_8_REF_PATH   (Path to reference assemblies for .NET 8.0 / AutoCAD 2025 & 2026)
 	AC_NET_10_REF_PATH  (Path to reference assemblies for .NET 10.0 / AutoCAD 2027+)
 	
-	AC_NET_4_EXE_PATH   (Path to install location of AutoCAD 2020-2024)
-	AC_NET_8_EXE_PATH   (Path to install location of AutoCAD 2025 or 2026)
-	AC_NET_10_EXE_PATH  (Path to install location of AutoCAD 2027)
+	AC_NET_4_EXE_PATH   (Path to install location of .NET 4.7-based AutoCAD)
+	AC_NET_8_EXE_PATH   (Path to install location of .NET 8.0-based AutoCAD)
+	AC_NET_10_EXE_PATH  (Path to install location of .NET 10.0-based AutoCAD)
 	
 	Each of the above variables only need to be defined if you 
 	are targeting the associated framework version. 
@@ -84,6 +84,9 @@
 	
 	<PropertyGroup>
 		<ExecutableName>acad.exe</ExecutableName>
+	</PropertyGroup>
+	<PropertyGroup>
+		<StartupAppName>acad</StartupAppName>
 	</PropertyGroup>
 
 	<PropertyGroup>
