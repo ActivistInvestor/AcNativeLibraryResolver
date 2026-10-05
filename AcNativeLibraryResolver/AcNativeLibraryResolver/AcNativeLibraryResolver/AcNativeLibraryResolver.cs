@@ -56,6 +56,7 @@ using System.Runtime.InteropServices;
 using System.Runtime.Loader;
 using System.Text;
 using System.Text.RegularExpressions;
+using System.Xml.Linq;
 
 namespace AcMgdLib.Runtime
 {
@@ -108,8 +109,8 @@ namespace AcMgdLib.Runtime
             initialized = true;
             /// Add commonly-used wildcards matching
             /// acdbXX.dll and acad.exe to cache:
-            AddModuleAlias("acdb2#.dll", AcDbModule);
-            AddModuleAlias("acdb##.dll", AcDbModule);
+            //AddModuleAlias("acdb2#.dll", AcDbModule);
+            //AddModuleAlias("acdb##.dll", AcDbModule);
             AddModuleAlias("acad.exe", mainModule);
             AssemblyLoadContext.Default.ResolvingUnmanagedDll += resolvingUnmanagedDll;
             /// Force loading of acutWcMatchEx() before
@@ -301,6 +302,11 @@ namespace AcMgdLib.Runtime
       {
          key ??= libraryName;
          string msg = $"[DllImport(\"{key}\")]";
+         var resolver = new AssemblyDependencyResolver(asm.Location);
+         var resolved = resolver.ResolveUnmanagedDllToPath(libraryName);
+         Debug.WriteLine($"resolver.ResolveUnmanagedDllToPath(libraryName) = \"{resolved}\"");
+         if(!string.IsNullOrEmpty(resolved) && File.Exists(resolved))
+            libraryName = resolved;
          if(NativeLibrary.TryLoad(libraryName, asm, null, out handle) && handle != IntPtr.Zero)
          {
             var module = AddModuleAlias(key, handle);
@@ -374,24 +380,25 @@ namespace AcMgdLib.Runtime
             .FirstOrDefault(m => IsEqual(m.ModuleName, filename));
       }
 
-      static ProcessModule AddModuleAlias(string key, nint handle = 0)
+      static ProcessModule AddModuleAlias(string alias, nint handle = 0)
       {
          ProcessModule module = null;
          if(handle == IntPtr.Zero)
-            module = FindLoadedModule(key);
+            module = FindLoadedModule(alias);
          else
             module = FindLoadedModule(handle);
          if(module != null)
          {
-            modules.TryAdd(key, module);
+            if(modules.TryAdd(alias, module))
+               Debug.WriteLine($"[DllImport(\"{alias}\")] resolved to {module.ModuleName}");
          }
          return module;
       }
 
-      static IntPtr AddModuleAlias(string key, ProcessModule module)
+      static IntPtr AddModuleAlias(string alias, ProcessModule module)
       {
-         if(modules.TryAdd(key, module))
-            Debug.WriteLine($"[DllImport(\"{key}\")] resolved to {module.ModuleName}");
+         if(modules.TryAdd(alias, module))
+            Debug.WriteLine($"[DllImport(\"{alias}\")] resolved to {module.ModuleName}");
          return module.BaseAddress;
       }
 
@@ -407,9 +414,8 @@ namespace AcMgdLib.Runtime
 
       /// <summary>
       /// Replaces a mismatched release number in a release-dependent 
-      /// filename with the current release number of the running product. 
-      /// The current release number of the running product is stored in 
-      /// the AcDbModuleVersion variable.
+      /// filename with the current release number of the running product,
+      /// which is accessed via the AcDbModuleVersion property.
       /// 
       /// For example, given the filename "acdb24.dll", when running on
       /// AutoCAD 2026, this method will replace it with "acdb26.dll".
@@ -504,9 +510,16 @@ namespace AcMgdLib.Runtime
       /// Autodesk.AutoCAD.Internal.Utils.WcMatchEx(), to avoid a 
       /// dependence on AcMgd.dll.
       /// 
-      /// The Resolve() method recognizes the token used as the
-      /// dllName in the DllImport attribute, and returns the
-      /// handle of the acdbXX.dll module.
+      /// Since acutWcMatchEx() is used to resolve wildcard dllNames, 
+      /// we cannot use a wildcard here, because acutWcMatchEx() can't 
+      /// be used to resolve its own import, which would constitute a 
+      /// circular dependency. 
+      /// 
+      /// To workaround that problem, the Resolve() method recognizes 
+      /// a special token, which when used as the dllName in a DllImport 
+      /// attribute, always returns the handle of the acdbXX.dll module, 
+      /// without the need to call acutWcMatchEx().
+      /// 
       /// </summary>
 
       [DllImport(AcNativeLibraryResolver.ACDB_DLL_TOKEN, 
