@@ -2,7 +2,7 @@
 
 AcNativeLibraryResolver is a utility/helper class that dynamically resolves the filenames of native libraries containing APIs that are imported and called by AutoCAD managed extensions using the [DllImport attribute](https://learn.microsoft.com/en-us/dotnet/api/system.runtime.interopservices.dllimportattribute?view=net-10.0) or the [LibraryImport attribute](https://learn.microsoft.com/en-us/dotnet/api/system.runtime.interopservices.libraryimportattribute?view=net-10.0).
 
-The purpose of AcNativeLibraryResolver is to allow AutoCAD managed extensions to import and call native AutoCAD APIs that reside in DLLs that have *release-dependent filenames*, *without* creating a dependence on a specific product release/version. It achieves that goal by allowing the extension developer to specify wildcard patterns in the dllName argument of the DllImport or LibraryImport attributes, or through autnomous, version-dependent filename resolution.
+The purpose of AcNativeLibraryResolver is to allow AutoCAD managed extensions to import and call native AutoCAD APIs that reside in DLLs that have *release-dependent filenames*, without creating a dependence on a specific product release/version. It achieves that goal by allowing the developer to specify wildcard patterns in the dllName argument of the DllImport or LibraryImport attributes, or through *automatic version-dependent filename resolution*.
 
 ### Prerequisites:
 AcNativeLibraryResolver *requires AutoCAD 2025 and .NET 8.0 or later*. Older AutoCAD releases and framework versions are not supported. The [AcMgdLib](https://github.com/ActivistInvestor/AcMgdLib) repository contains an alternative solution that works on older AutoCAD/Framework versions, but is vastly-more complicated to use than this solution. See [DllImport.cs](https://github.com/ActivistInvestor/AcMgdLib/blob/main/AcMgdLib/Common/DllImport.cs) & [AcDbNativeMethods.cs](https://github.com/ActivistInvestor/AcMgdLib/blob/main/AcMgdLib/Common/AcDbNativeMethods.cs)
@@ -13,17 +13,17 @@ AcNativeLibraryResolver operates on the dllName argument passed to the DllImport
 
 ### Wcmatch-style wildcards:
      
-You can specify AutoCAD style *wildcard* patterns in the dllName argument. A wildcard pattern must match exactly *one and only one* loaded module, or module filename in the base directory. If a module with a matching name is found, the dllName argument resolves to that module.
+You can specify AutoCAD style *wildcard* patterns in the dllName argument. A wildcard pattern must match *one and only one* loaded module or module filename in the base directory. If a module with a matching name is found, the dllName argument resolves to that module.
   
 ### Mismatched release-dependent module names:
   
 If the filename in the dllName argument ends with exactly two numeric digits, and there is no module found having that filename, the two numeric digits are replaced with those of the current product release (e.g., 25, 26, 27, etc). 
   
-Hence, the dllName argument `"acdb24.dll"` will be replaced with `"acdb25.dll"` on AutoCAD 2025, or `"acdb26.dll"` on AutoCAD 2026, and so on.
+Hence, the dllName argument `"acdb24.dll"` will be replaced with `"acdb25.dll"` on AutoCAD 2025, or with `"acdb26.dll"` on AutoCAD 2026, and so on.
   
 ### Host executable name resolution:
   
-If the dllName argument is `"acad.exe"`, and the filename of the current process is not `"acad.exe"`, the `"acad.exe"` argument is replaced with the filename of the current process. Hence, `"acad.exe"` is always interpreted as the name of the current process executable, allowing code that imports APIs from it to be portable across multiple product variants that may have different executable names.
+If the dllName argument is `"acad.exe"`, and the filename of the current process is not `"acad.exe"`, the `"acad.exe"` argument is replaced with the filename of the current process. Hence, `"acad.exe"` is always interpreted as current process executable's main module, allowing code that imports APIs from it to be portable across multiple product variants that may have different executable names.
 
 ## Background
 
