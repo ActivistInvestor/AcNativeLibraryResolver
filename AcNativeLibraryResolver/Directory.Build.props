@@ -84,19 +84,43 @@
 	
 	<PropertyGroup>
 		<ExecutableName>acad.exe</ExecutableName>
-	</PropertyGroup>
-	<PropertyGroup>
 		<StartupAppName>acad</StartupAppName>
+		<StartupFolder>Startup Assets</StartupFolder>
 	</PropertyGroup>
 
 	<PropertyGroup>
 		<PlatformTarget>x64</PlatformTarget>
 	</PropertyGroup>
-	
+
+	<!-- 
+		Defines the $(BuildTarget) property which holds that
+		full-qualified path to the build output assembly.
+	-->
+	<PropertyGroup>
+		<_AssyName Condition="'$(AssemblyName)' != ''">$(AssemblyName)</_AssyName>
+		<_AssyName Condition="'$(AssemblyName)' == ''">$(MSBuildProjectName)</_AssyName>
+
+		<!-- Construct path using early MSBuild properties -->
+		<BuildTarget Condition="'$(TargetFramework)' != ''">$([System.IO.Path]::GetFullPath('$(MSBuildProjectDirectory)\$(OutputPath)$(_AssyName).dll'))</BuildTarget>
+	</PropertyGroup>
+
 	<!-- Default startup dwg and scr filenames -->
 	<PropertyGroup>
-		<StartupDwg>startup.dwg</StartupDwg>
-		<StartupScr>startup.scr</StartupScr>
+		<!-- The folder under the project root folder 
+		where startup.dwg and startup.scr are probed for-->
+		<!-- <StartupDir>$(ProjectDir)Startup\</StartupDir> -->
+		<!-- Depreciating fixed filename for startup dwg/scr 
+		<StartupDwgName>startup.dwg</StartupDwgName>
+		<StartupScrName>startup.scr</StartupScrName>
+		
+		The .csproj can override default probing for startup
+		drawing and script files by assigning a fully-qualified
+		path to a .dwg and/or .scr file to:
+		
+		  <StartupDrawing>C:\Drawings\MyStartup.dwg</StartupDrawing>
+		  <StarupScript>C:\Scripts\MyStartup.scr</StartupScript>
+		  
+		-->
 	</PropertyGroup>
 
 	<!-- Framework / AutoCAD mapping       
