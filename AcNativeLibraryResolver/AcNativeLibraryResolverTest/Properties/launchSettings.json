@@ -50,42 +50,7 @@
     You can delete profiles for AutoCAD releases you are not 
     targeting and not define the corresponding environment variable. 
   
-    Command line arguments:
-
-    ###### REVISION REQUIRED ######
-  
-    The Directory.Build.targets file in this project template 
-    defines a property named $(CommandLineArgs) that is set to the 
-    following values:
-
-
-    1.  If a drawing file named "startup.dwg" is found in the 
-        project folder, its full path is added to the command 
-        line as the drawing file to be opened at startup.
-  
-    2.  If a script file named "startup.scr" is found in the
-        project folder, its full path is added to the command 
-        line with the /b switch to run the script at startup.
-       
-    3.  In all cases, the /nologo switch is added to suppress 
-        the AutoCAD splash screen.
-
-    4.  If the $(CommandLineArgs) property is not an empty string, 
-        it overrides the default command line that is constructed
-        by the build logic using a startup.dwg and/or startup.scr 
-        file. Hence, if you define the $(CommandLineArgs) property in
-        a .csproj file, it defines the entire command line to be 
-        used when launching AutoCAD for debugging, regardless of
-        whether a startup.dwg and/or startup.scr file exists in 
-        the project folder.
-
-        For example, to specify the initial view of a drawing
-        opened at launch to be "PLAN", you can add the following 
-        to your .csproj file:
-
-        <PropertyGroup>
-           <CommandLine>MyDrawing.dwg /v PLAN</CommandLine>
-        </PropertyGroup>
+    NOTE: Documentation for new Directory.Build.* files is not complete.
 
 */
 
@@ -96,44 +61,27 @@
       "commandName": "Executable",
       "executablePath": ".\\$(ExecutableName)",
       "commandLineArgs": "$(CommandLineArgs)",
-      "workingDirectory": "$(AC_NET_4_BASE_PATH)",
-      "environmentVariables": {
-        "DEBUG_TARGET": "\"$(TargetPath)\"",
-        "DEBUG_SCRIPT": "$(DebugScriptPath)"
-      }
+      "workingDirectory": "$(AC_NET_4_BASE_PATH)"
     },
     "AutoCAD 2025/2026 (.NET 8.0)": {
       "framework": "net8.0-windows", // Modify if required for .NET 10.0-based updates
       "commandName": "Executable",
       "executablePath": ".\\$(ExecutableName)",
       "commandLineArgs": "$(CommandLineArgs)",
-      "workingDirectory": "$(AC_NET_8_BASE_PATH)",
-      "environmentVariables": {
-        "DEBUG_TARGET": "\"$(TargetPath)\"",
-        "DEBUG_SCRIPT": "$(DebugScriptPath)"
-      }
+      "workingDirectory": "$(AC_NET_8_BASE_PATH)"
     },
     "AutoCAD 2027 (.NET 10.0)": {
       "framework": "net10.0-windows",
       "commandName": "Executable",
       "executablePath": ".\\$(ExecutableName)",
       "commandLineArgs": "$(CommandLineArgs)",
-      "workingDirectory": "$(AC_NET_10_BASE_PATH)",
-      "environmentVariables": {
-        "DEBUG_TARGET": "\"$(TargetPath)\"",
-        "DEBUG_SCRIPT": "$(DebugScriptPath)"
-      }
+      "workingDirectory": "$(AC_NET_10_BASE_PATH)"
     },
     "AutoCAD 202X (.NET 10.0)": { // only for pre-release builds that use an app execution alias
       "framework": "net10.0-windows",
       "commandName": "Executable",
       "executablePath": "$(ExecutableName)",
-      "commandLineArgs": "$(CommandLineArgs)",
-      "environmentVariables": {
-        "DEBUG_TARGET": "\"$(TargetPath)\"",
-        "DEBUG_SCRIPT": "$(DebugScriptPath)"
-      }
-
+      "commandLineArgs": "$(CommandLineArgs)"
     }
   }
 }
