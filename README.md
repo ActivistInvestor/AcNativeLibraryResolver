@@ -7,6 +7,10 @@ The purpose of AcNativeLibraryResolver is to allow AutoCAD managed extensions to
 ### Prerequisites:
 AcNativeLibraryResolver *requires AutoCAD 2025 and .NET 8.0 or later*. Older AutoCAD releases and framework versions are not supported. The [AcMgdLib](https://github.com/ActivistInvestor/AcMgdLib) repository contains an alternative solution that works on older AutoCAD/Framework versions, but is vastly-more complicated to use than this solution. See [DllImport.cs](https://github.com/ActivistInvestor/AcMgdLib/blob/main/AcMgdLib/Common/DllImport.cs) & [AcDbNativeMethods.cs](https://github.com/ActivistInvestor/AcMgdLib/blob/main/AcMgdLib/Common/AcDbNativeMethods.cs)
 
+## Build Environment
+
+The test project included with AcNativeLibraryResolver uses a customized build environment that uses multi-targeting and advanced debug/test automation. Please see the updated readme in the [AcadMultiTargetExample](https://github.com/ActivistInvestor/AcadMultiTargetExample) repository for details on the updated build environment.
+
 ## Supported Functionality
 
 AcNativeLibraryResolver operates on the dllName argument passed to the DllImport or LibraryImport attribute (the name of the library to import from) and supports the following basic operations on that argument:
