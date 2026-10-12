@@ -4,10 +4,17 @@
 	
 	See Readme.md for prerequisites and full details.
 	
+	Revisions:
+	
+	Added debug launch-automation functionality as
+	described below.
+	
+	Renamed "AcReferencePath" property to "AcRefPath".
+	
 	
 	-->
 
-	<!-- AssemblySearchPaths and AcReferencePath are assigned
+	<!-- AssemblySearchPaths and AcRefPath are assigned
 	multiple times, once for each build cycle that targets a 
 	different framework version. 
 	
@@ -22,8 +29,8 @@
 	without	having to specify explicit locations in <HintPath> elements
 	for each reference.	-->
 
-	<PropertyGroup Condition="Exists('$(AcReferencePath)')">
-		<AssemblySearchPaths>$(AcReferencePath);$(AssemblySearchPaths)</AssemblySearchPaths>
+	<PropertyGroup Condition="Exists('$(AcRefPath)')">
+		<AssemblySearchPaths>$(AcRefPath);$(AssemblySearchPaths)</AssemblySearchPaths>
 	</PropertyGroup>
 
 	<!-- 
@@ -37,11 +44,13 @@
 	To accomodate extensions that are intended to not have a
 	dependence on AutoCAD (e.g., loaded into AcCoreConsole.exe,
 	or another RealDwg host application), You can set the
-	<RealDwg> property to true in your .csproj file. 
-	If you do that, AcMgd.dll is not referenced.
+	<RealDwg> property to true in your .csproj file. If you do 
+	that, AcMgd.dll is not referenced.
 	
 	========================================================= 
 	-->
+
+	<!-- If the ExecutableName is "accoreconsole.exe", set $(RealDwg) to true -->
 	<PropertyGroup>
 		<RealDwg Condition="'$(ExecutableName)' == 'accoreconsole.exe'">true</RealDwg>
 	</PropertyGroup>
@@ -65,11 +74,18 @@
 	Global usings and aliases 
 	
 	
-	Lines with the Alias= attribute only define an alias that
-	is usually only used to disambiguate a type (for example,
+	Lines with the Alias= attribute only define an alias 
+	that can be used to disambiguate a type (for example, 
 	AcRx.Exception verses System.Exception).
 	
 	Lines without the Alias= attribute define a global using.
+	
+	The global usings for Autodesk.AutoCAD.GraphicsInterface
+	and Autodesk.AutoCAD.GraphicsSystem are disabled to avoid
+	numerous ambiguous type errors. Either of those namespaces
+	can be used by prefixing the type with "AcGi" or "AcGs".
+	Modify as needed or include them in individual projects
+	as needed.
 	
 	-->
 	<ItemGroup>
@@ -83,59 +99,86 @@
 		<Using Include="Autodesk.AutoCAD.Runtime" Alias="AcRx" />
 		<Using Include="Autodesk.AutoCAD.Geometry"/>
 		<Using Include="Autodesk.AutoCAD.Geometry" Alias="AcGe" />
-		<Using Include="Autodesk.AutoCAD.GraphicsInterface"/>
+		<!-- <Using Include="Autodesk.AutoCAD.GraphicsInterface"/> -->
 		<Using Include="Autodesk.AutoCAD.GraphicsInterface" Alias="AcGi" />
 		<Using Include="Autodesk.AutoCAD.Internal"/>
-		<!-- Use only if required as it requires too much
-		     disabiguation between same-named types in other
-			 namespaces.
-		<Using Include="Autodesk.AutoCAD.GraphicsSystem"/>
+		<!-- <Using Include="Autodesk.AutoCAD.GraphicsSystem"/> -->
 		<Using Include="Autodesk.AutoCAD.GraphicsSystem" Alias="AcGs" />
-		-->
 		<Using Include="System.Math" Static="true" />
 	</ItemGroup>
 
 	<!-- Conditional alias for the Application or Core.Application 
-	class depending on if AcMgd.dll is referenced:
-	When acmgd.dll is not referenced (e.g., $(RealDwg) == true), assign the
-	AcadApp alias to Autodesk.AutoCAD.ApplicationServices.Core.Application.
-	Otherwise, assign it to Autodesk.AutoCAD.ApplicationServices.Application
+	class, depending on if AcMgd.dll is referenced:
+	
+	When acmgd.dll is not referenced (e.g., $(RealDwg) == true), assigns the
+	AcadApp alias to ApplicationServices.Core.Application. Otherwise, assigns 
+	it to ApplicationServices.Application.
 	-->
 	<ItemGroup>
-		<Using Include="Autodesk.AutoCAD.ApplicationServices.Core" Condition="'$(RealDwg)' == 'true'"/>
-		<Using Include="Autodesk.AutoCAD.ApplicationServices.Core.Application" Alias="AcadApp" Condition="'$(RealDwg)' == 'true'" />
 		<Using Include="Autodesk.AutoCAD.ApplicationServices.Application" Alias="AcadApp" Condition="'$(RealDwg)' != 'true'" />
 		<Using Include="Autodesk.AutoCAD.ApplicationServices" Condition="'$(RealDwg)' != 'true'" />
+		<Using Include="Autodesk.AutoCAD.ApplicationServices.Core" Condition="'$(RealDwg)' == 'true'"/>
+		<Using Include="Autodesk.AutoCAD.ApplicationServices.Core.Application" Alias="AcadApp" Condition="'$(RealDwg)' == 'true'" />
 	</ItemGroup>
 
 	<!-- ====================================================================== -->
-	<!-- Support for startup .dwg, .dwt, .scr files, and command line arguments -->
-	<!-- ====================================================================== -->	    
+	<!-- Startup .dwg, .dwt, .lsp, & .scr files  -->
+	<!-- ====================================================================== -->
 
 	<PropertyGroup Condition="'$(TargetFramework)' != ''">
-		<StartupPath Condition="'$(StartupPath)' == ''">$(MSBuildProjectDirectory)\$(StartupFolder)\</StartupPath>
-		<StartupPath Condition="!$([System.IO.Path]::IsPathRooted('$(StartupPath)'))">$(MSBuildProjectDirectory)\$(StartupPath)</StartupPath>
-		<StartupPath Condition="!HasTrailingSlash('$(StartupPath)')">$(StartupPath)\</StartupPath>
-
-		<_LoaderScript>$(TargetDir)$(AssemblyName).scr</_LoaderScript>
-
 		<!-- Clear out these properties on each build cycle -->
-		<DebugScriptPath></DebugScriptPath>
 		<_DwgPath></_DwgPath>
-		<_ScriptPath></_ScriptPath>
+		<_DwtPath></_DwtPath>
+		<_LspPath></_LspPath>
+		<_ScrPath></_ScrPath>
 		<_CommandLine></_CommandLine>
+		<_StartupPath>$(MSBuildProjectDirectory)\$(StartupFolder)</_StartupPath>
 	</PropertyGroup>
-	
+
+	<!-- Resolve startup folder path -->
+	<!-- $(StartupFolder) holds the name of the startup folder (default: "Startup") -->
+
+	<Choose>
+		<When Condition="Exists('$(StartupPath)')">
+			<PropertyGroup>
+				<StartupPath>$(StartupPath.TrimEnd('\'))</StartupPath>
+			</PropertyGroup>
+		</When>
+		<When Condition="'$(StartupFolder)' == ''">
+			<PropertyGroup>
+				<StartupPath>NOSTARTUPFOLDER</StartupPath>
+			</PropertyGroup>
+		</When>
+		<When Condition="Exists($(_StartupPath))">
+			<PropertyGroup>
+				<StartupPath>$(_StartupPath)</StartupPath>
+			</PropertyGroup>
+		</When>
+	</Choose>
+
+	<!-- Replaced by above logic
+	<PropertyGroup Condition="'$(StartupPath)' == '' And ">
+		<StartupPath>$(MSBuildProjectDirectory)\$(StartupFolder)</StartupPath>
+	</PropertyGroup>
+	<PropertyGroup Condition="'$(StartupPath)' != '' And !Exists('$(StartupPath)')">
+		<StartupPath></StartupPath>
+	</PropertyGroup>
+	<PropertyGroup Condition="'$(StartupPath)' != '' And Exists('$(StartupPath)')">
+		<StartupPath>$(StartupPath.TrimEnd('\'))</StartupPath>
+	</PropertyGroup>
+	-->
+
 
 	<!-- Resolve Startup DWG File -->
 	<Choose>
-		<!-- Check if user explicitly-specified a startup drawing file -->
+		<!-- If there is an explicitly-specified startup drawing file, use that -->
 		<When Condition="Exists('$(StartupDrawing)')">
 			<PropertyGroup>
 				<_DwgPath>$(StartupDrawing)</_DwgPath>
 			</PropertyGroup>
 		</When>
-		<Otherwise> <!-- Look for a .dwg file in the Startup Assets folder -->
+		<Otherwise>
+			<!-- Look for a .dwg file in the Startup folder -->
 			<PropertyGroup Condition="Exists('$(StartupPath)')">
 				<_DwgFiles>$([System.IO.Directory]::GetFiles('$(StartupPath)', '*.dwg'))</_DwgFiles>
 				<_DwgPath Condition="'$(_DwgFiles)' != ''">$(_DwgFiles.Split(';')[0])</_DwgPath>
@@ -151,9 +194,24 @@
 			</PropertyGroup>
 		</When>
 		<Otherwise>
-			<PropertyGroup Condition="Exists('$(StartupPath)')">
+			<PropertyGroup Condition="'$(_DwgPath)' == '' And Exists('$(StartupPath)')">
 				<_DwtFiles>$([System.IO.Directory]::GetFiles('$(StartupPath)', '*.dwt'))</_DwtFiles>
 				<_DwtPath Condition="'$(_DwtFiles)' != ''">$(_DwtFiles.Split(';')[0])</_DwtPath>
+			</PropertyGroup>
+		</Otherwise>
+	</Choose>
+
+	<!-- Resolve Startup Lisp File -->
+	<Choose>
+		<When Condition="Exists('$(StartupLisp)')">
+			<PropertyGroup>
+				<_LspPath>$(StartupLisp)</_LspPath>
+			</PropertyGroup>
+		</When>
+		<Otherwise>
+			<PropertyGroup Condition="Exists('$(StartupPath)')">
+				<_LspFiles>$([System.IO.Directory]::GetFiles('$(StartupPath)', '*.lsp'))</_LspFiles>
+				<_LspPath Condition="'$(_LspFiles)' != ''">$(_LspFiles.Split(';')[0])</_LspPath>
 			</PropertyGroup>
 		</Otherwise>
 	</Choose>
@@ -162,29 +220,30 @@
 	<Choose>
 		<When Condition="Exists('$(StartupScript)')">
 			<PropertyGroup>
-				<_ScriptPath>$(StartupScript)</_ScriptPath>
+				<_ScrPath>$(StartupScript)</_ScrPath>
 			</PropertyGroup>
 		</When>
 		<Otherwise>
 			<PropertyGroup Condition="Exists('$(StartupPath)')">
 				<_ScrFiles>$([System.IO.Directory]::GetFiles('$(StartupPath)', '*.scr'))</_ScrFiles>
-				<_ScriptPath Condition="'$(_ScrFiles)' != ''">$(_ScrFiles.Split(';')[0])</_ScriptPath>
+				<_ScrPath Condition="'$(_ScrFiles)' != ''">$(_ScrFiles.Split(';')[0])</_ScrPath>
 			</PropertyGroup>
 		</Otherwise>
 	</Choose>
 
-	<!-- Resolve Effective Command Line -->
+	<!-- Generate Command Line -->
 	<Choose>
 		<When Condition="'$(TargetFramework)' != ''">
 			<Choose>
-				<!-- A User-specified command line overrides all default processing -->
+				<!-- Explicit User-supplied command line arguments overrides everything -->
+				<!-- There are no startup files or dynamically-generated startup script used -->
 				<When Condition="'$(CommandLineArgs.Trim())' != ''">
 					<PropertyGroup>
-						<_CommandLine>$(CommandLineArgs)</_CommandLine>
+						<_CommandLine>$(CommandLineArgs.Trim())</_CommandLine>
 					</PropertyGroup>
 				</When>
-				<!-- Construct the default command line using contents of Startup folder and loader script file -->
 				<Otherwise>
+					<!-- Build the command line -->
 					<Choose>
 						<!-- Check for a .dwg file -->
 						<When Condition="Exists('$(_DwgPath)')">
@@ -199,14 +258,15 @@
 							</PropertyGroup>
 						</Otherwise>
 					</Choose>
-
-					<!-- Point /b switch to the target-framework-specific loader.scr generated in $(TargetDir) -->
+					<!-- Set the startup script to the dynamically-generated 
+					     loader script file for the current target framework -->
 					<PropertyGroup>
 						<_LoaderScript>$(TargetDir)$(AssemblyName).scr</_LoaderScript>
-						<_CommandLine>$(_CommandLine) /b "$(_LoaderScript)" </_CommandLine>
+						<_CommandLine>$(_CommandLine.Trim()) /b "$(_LoaderScript)" </_CommandLine>
 					</PropertyGroup>
 
-					<!-- Append /nologo switch and any additional arguments in <AppendToCommandLine> -->
+					<!-- Add /nologo switch along with any additional arguments 
+						 that were specified in <AppendToCommandLine/> -->
 					<PropertyGroup>
 						<_CommandLine>$(_CommandLine.Trim()) /nologo $(AppendToCommandLine.Trim())</_CommandLine>
 					</PropertyGroup>
@@ -215,32 +275,82 @@
 		</When>
 	</Choose>
 
-	<!-- Store resolved command line in CommandLineArgs for use by launchSettings.json -->
+	<!-- Store the resolved command line in CommandLineArgs, 
+	for use by launchSettings.json, using the same name as
+	the json attribute -->
 	<PropertyGroup Condition="'$(_CommandLine.Trim())' != ''">
 		<CommandLineArgs>$(_CommandLine.Trim())</CommandLineArgs>
 	</PropertyGroup>
 
 	<!-- ====================================================================== -->
-	<!-- Framework-Specific Loader Script Generation                            -->
+	<!-- Target Framework-Specific Loader Script Generation                     -->
 	<!-- ====================================================================== -->
+	<!-- 
+	Generated loader script: loads target assembly and optional .lsp and .scr files.
+	The 3 arguments to the lambda function are MSBUILD properties that are replaced 
+	with their values for each target framework each time the script file is generated. 
+	A separate and distinct .scr file is generated for each target framework that is 
+	output to the folder where the corresponding target assembly is located.
+		 
+	Both the second and third arguments are optional. If no lisp and/or scrpt file
+	is being used, the corresponding argument is an empty string.
+	
+		(  (lambda (asm lsp scr / f) 
+				(if (setq f (findfile asm))
+					(progn 
+						(command "._NETLOAD" f)
+						(if (setq f (findfile lsp))
+							(load f)
+						)
+						(if (setq f (findfile scr))
+							(command "._SCRIPT" f)
+						)
+					)
+				)
+				(princ)
+			) 
+			"$(_Asm)"  ;; Expands to Target assembly to be NETLOADED
+			"$(_Lsp)"  ;; Expands to startup lisp file to be loaded.
+			"$(_Scr)"  ;; Expands to startup script file to be run.
+		)
+
+	-->
 
 	<Target Name="GenerateLoaderScript" AfterTargets="Build" Condition="'$(TargetFramework)' != ''">
 		<PropertyGroup>
-			<_Target>$(TargetPath.Replace('\', '\\'))</_Target>
-			<_Script Condition="'$(_ScriptPath)' != ''">$(_ScriptPath.Replace('\', '\\'))</_Script>
-			<_ScriptContent>((lambda (dll scr / f) (if (setq f (findfile dll))(command "._NETLOAD" dll))(if (setq f (findfile scr))(command "._SCRIPT" scr))(princ)) "$(_Target)" "$(_Script)")</_ScriptContent>
-			<_ScriptOutput>$(TargetDir)$(AssemblyName).scr</_ScriptOutput>
+			<_Asm>$(TargetPath.Replace('\', '\\'))</_Asm>
+			<_Lsp Condition="'$(_LspPath)' != ''">$(_LspPath.Replace('\', '\\'))</_Lsp>
+			<_Scr Condition="'$(_ScrPath)' != ''">$(_ScrPath.Replace('\', '\\'))</_Scr>
+			<_ScrContent>((lambda (asm lsp scr / f) (if (setq f (findfile asm))(progn (command "._NETLOAD" f)(if (setq f (findfile lsp))(load f))(if (setq f (findfile scr))(command "._SCRIPT" f))))(princ)) "$(_Asm)" "$(_Lsp)" "$(_Scr)")</_ScrContent>
+			<_ScrPath>$(TargetDir)$(AssemblyName).scr</_ScrPath>
 		</PropertyGroup>
-		<WriteLinesToFile File="$(_ScriptOutput)" Lines="$(_ScriptContent)" Overwrite="true" WriteOnlyWhenDifferent="true" />
-		<Message Text="[$(MSBuildProjectName) ($(TargetFramework))]: Generated loader script at: $(_ScriptOutput)" Importance="high" />
+		<WriteLinesToFile File="$(_ScrPath)" Lines="$(_ScrContent)" Overwrite="true" WriteOnlyWhenDifferent="true"/>
+		<Message Text="[$(MSBuildProjectName) ($(TargetFramework))]: Generated loader script $(_ScrPath)" Importance="high" />
+		<!-- Debug output
+		<Message Text="DEBUG: _Asm: $(_Asm)" Importance="high"/>
+		<Message Text="DEBUG: _LspPath: $(_LspPath)" Importance="high"/>
+		<Message Text="DEBUG: _ScrPath: $(_ScrPath)" Importance="high"/>
+		<Message Text="DEBUG: _ScrContent: $(_ScrContent)" Importance="high"/>
+		<Message Text="DEBUG: _StartupPath: $(_StartupPath)" Importance="high"/>
+		<Message Text="DEBUG: StartupPath: $(StartupPath)" Importance="high"/>
+		-->
 	</Target>
+
+	<!-- Delete any dangling .dwl/.dwl2 files from startup folder (*.bak files are left intact) -->
+	<Target Name="CleanStartupFolder" AfterTargets="Build" Condition="'$(TargetFramework)' != ''">
+		<ItemGroup>
+			<_LockFiles Include="$(StartupPath)\*.dwl;$(StartupPath)\*.dwl2" Condition="Exists('$(StartupPath)')" />
+		</ItemGroup>
+		<Delete Files="@(_LockFiles)" />
+	</Target>
+
 
 	<!-- IMPORTANT: Required to trigger evaluation of $(CommandLineArgs) -->
 	<Target Name="EvaluateCommandLineArgs" AfterTargets="Build" Condition="'$(TargetFramework)' != ''">
 		<Message Text="[$(MSBuildProjectName) ($(TargetFramework))]: Command Line: $(CommandLineArgs)" Importance="high" />
-	</Target>	
-	
-	
+	</Target>
+
+
 	<!-- ==================================================== -->
 	<!-- Diagnostic / Informational output -->
 	<!-- ==================================================== -->
@@ -258,8 +368,8 @@
 	that were used used for the build target.-->
 
 	<Target Name="ReportReferences" AfterTargets="Build">
-		<Message Text="[$(ProjectDisplayName)]: Built target for $(TargetDisplayName) using references from $(AcReferencePath)"
-			Condition="'$(AcReferencePath)' != ''"
+		<Message Text="[$(ProjectDisplayName)]: Built target for $(TargetDisplayName) using references from $(AcRefPath)"
+			Condition="'$(AcRefPath)' != ''"
 			Importance="high">
 		</Message>
 	</Target>
@@ -275,8 +385,8 @@
 			<_DwgPathDisplay Condition="'$(_DwgPath)' != ''">$(_DwgPath)</_DwgPathDisplay>
 			<_DwgPathDisplay Condition="'$(_DwgPath)' == ''">[Empty]</_DwgPathDisplay>
 
-			<_ScriptPathDisplay Condition="'$(_ScriptPath)' != ''">$(_ScriptPath)</_ScriptPathDisplay>
-			<_ScriptPathDisplay Condition="'$(_ScriptPath)' == ''">[Empty]</_ScriptPathDisplay>
+			<_ScrPathDisplay Condition="'$(_ScrPath)' != ''">$(_ScrPath)</_ScrPathDisplay>
+			<_ScrPathDisplay Condition="'$(_ScrPath)' == ''">[Empty]</_ScrPathDisplay>
 
 			<_CommandLineDisplay Condition="'$(_CommandLine)' != ''">$(_CommandLine)</_CommandLineDisplay>
 			<_CommandLineDisplay Condition="'$(_CommandLine)' == ''">[Empty]</_CommandLineDisplay>
@@ -284,17 +394,17 @@
 
 		<Message Text="[$(ProjectDisplayName) DEBUG]: StartupPath:     $(StartupPath)" Importance="high" />
 		<Message Text="[$(ProjectDisplayName) DEBUG]: _DwgPath:        $(_DwgPathDisplay)" Importance="high" />
-		<Message Text="[$(ProjectDisplayName) DEBUG]: _ScriptPath:     $(_ScriptPathDisplay)" Importance="high" />
+		<Message Text="[$(ProjectDisplayName) DEBUG]: _ScrPath:     $(_ScrPathDisplay)" Importance="high" />
 		<Message Text="[$(ProjectDisplayName) DEBUG]: _CommandLine:    $(_CommandLineDisplay)" Importance="high" />
 		<Message Text="[$(ProjectDisplayName) DEBUG]: CommandLineArgs: $(CommandLineArgs)" Importance="high" />
 	</Target>
-	
+
 	<!-- Verify that required environment variables are defined for 
 		 each targeted framework being used in the project, and point 
 		 to a valid path that holds AutoCAD reference assemblies:
 	-->
 
-	<Target Name="ValidateAcReferencePath" BeforeTargets="PrepareForBuild">
+	<Target Name="ValidateAcRefPath" BeforeTargets="PrepareForBuild">
 		<Error Condition="'$(_Ver)' == '4' And ('$(AC_NET_4_REF_PATH)' == '' Or !Exists('$(AC_NET_4_REF_PATH)\accoremgd.dll'))"
 			Text="[$(ProjectDisplayName)]: The 'AC_NET_4_REF_PATH' environment variable is not defined or the specified path does not contain reference assemblies for $(TargetDisplayName). Value: '$(AC_NET_4_REF_PATH)'."/>
 
@@ -326,7 +436,7 @@
 	<Target Name ="DebugAcadReferencePath"
 			Condition="'$(DebugAcadReferencePath)' == 'true' And '$(TargetFramework)' != ''"
 			BeforeTargets="ResolveAssemblyReferences">
-		<Message Text="[$(ProjectDisplayName)]: AutoCAD Reference Path: $(AcReferencePath)" Importance="high" />
+		<Message Text="[$(ProjectDisplayName)]: AutoCAD Reference Path: $(AcRefPath)" Importance="high" />
 	</Target>
 
 
