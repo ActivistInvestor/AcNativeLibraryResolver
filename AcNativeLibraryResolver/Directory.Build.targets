@@ -146,7 +146,7 @@
 		</When>
 		<When Condition="'$(StartupFolder)' == ''">
 			<PropertyGroup>
-				<StartupPath>NOSTARTUPFOLDER</StartupPath>
+				<StartupPath></StartupPath>
 			</PropertyGroup>
 		</When>
 		<When Condition="Exists($(_StartupPath))">
