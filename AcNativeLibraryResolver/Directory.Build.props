@@ -74,13 +74,35 @@
 		<NoWarn>$(NoWarn);MSB3277</NoWarn>
 	</PropertyGroup>
 
-	<!-- The default name of the executable to launch in
-	debug sessions. This can be overridden by assigning
-	a different value to the <ExecutableName> property
-	in a .csproj file. For example, it can be set to
-	"accoreconsole.exe" to use AutoCAD Core Console as
-	the debug target. This property is referenced from
-	launchSettings.json and Directory.Build.targets -->
+	<!-- Master switch that enables/disables dynamically-generated loader 
+	script and command line arguments that automatically NETLOAD the target 
+	assembly into AutoCAD, and open/load startup .dwg/.dwt/.lsp/.scr files
+	when a debug session is started.
+	
+	When set to false, there is no dynamically-generated loader script or
+	command line arguments required to load it, and no startup files are
+	automatically opened/loaded.
+	
+	This an opt-out setting that is opt-in by default. For projects that 
+	are primarily intended to be loaded indirectly by being referenced 
+	from another project, this should be set to false in the .csproj file 
+	to disable dynamic loader script and command line argument generation.
+	
+	-->
+	
+	<PropertyGroup Condition="'$(TargetFramework)' != ''">
+		<DebugStartupProject Condition="'$(DebugStartupProject)' != 'true'">true</DebugStartupProject>
+	</PropertyGroup>
+
+	<!-- <ExecutableName/> property: -->
+	<!-- The default name of the executable to launch in debug sessions. 
+	Also defines the executable that is	killed when the project is built, 
+	if the <KillTargetProcessOnBuild> property is true.
+	
+	Can be overridden by assigning a different value to this property
+	in a .csproj file. For example, it can be set to "accoreconsole.exe" 
+	to use AutoCAD Core Console as the debug target. This property is 
+	referenced from	launchSettings.json and Directory.Build.targets -->
 
 	<PropertyGroup>
 		<ExecutableName>acad.exe</ExecutableName>

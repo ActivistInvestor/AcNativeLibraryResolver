@@ -73,7 +73,6 @@
 	<!-- ========================================================= 
 	Global usings and aliases 
 	
-	
 	Lines with the Alias= attribute only define an alias 
 	that can be used to disambiguate a type (for example, 
 	AcRx.Exception verses System.Exception).
@@ -131,14 +130,30 @@
 		<_DwtPath></_DwtPath>
 		<_LspPath></_LspPath>
 		<_ScrPath></_ScrPath>
+		<_LoaderScript></_LoaderScript>
 		<_CommandLine></_CommandLine>
+	</PropertyGroup>
+
+	<PropertyGroup>
+		<_DebugAutomation>false</_DebugAutomation>
+	</PropertyGroup>
+	<PropertyGroup Condition="'(TargetFramework)' != '' And '$(DebugStartupProject)' == 'true'">
+		<_DebugAutomation>true</_DebugAutomation>
+	</PropertyGroup>
+	<PropertyGroup Condition="'$(_DebugAutomation)' == 'true'">
 		<_StartupPath>$(MSBuildProjectDirectory)\$(StartupFolder)</_StartupPath>
 	</PropertyGroup>
 
 	<!-- Resolve startup folder path -->
 	<!-- $(StartupFolder) holds the name of the startup folder (default: "Startup") -->
+	<!-- If a path is assigned to $(StartupPath), $(StartupFolder) is not used. -->
 
 	<Choose>
+		<When Condition="'$(_DebugAutomation)' != 'true'">
+			<PropertyGroup>
+				<StartupPath></StartupPath>
+			</PropertyGroup>
+		</When>
 		<When Condition="Exists($(StartupPath))">
 			<PropertyGroup>
 				<StartupPath>$(StartupPath.TrimEnd('\'))</StartupPath>
@@ -158,14 +173,14 @@
 
 	<!-- Resolve Startup DWG File -->
 	<Choose>
+		<When Condition="'$(_DebugAutomation)' != 'true'"></When>
 		<!-- If there is an explicitly-specified startup drawing file, use that -->
 		<When Condition="Exists('$(StartupDrawing)')">
 			<PropertyGroup>
 				<_DwgPath>$(StartupDrawing)</_DwgPath>
 			</PropertyGroup>
 		</When>
-		<Otherwise>
-			<!-- Look for a .dwg file in the Startup folder -->
+		<Otherwise> <!-- Look for a .dwg file in the Startup folder -->
 			<PropertyGroup Condition="Exists('$(StartupPath)')">
 				<_DwgFiles>$([System.IO.Directory]::GetFiles('$(StartupPath)', '*.dwg'))</_DwgFiles>
 				<_DwgPath Condition="'$(_DwgFiles)' != ''">$(_DwgFiles.Split(';')[0])</_DwgPath>
@@ -175,6 +190,7 @@
 
 	<!-- Resolve startup drawing template file -->
 	<Choose>
+		<When Condition="'$(_DebugAutomation)' != 'true'"></When>
 		<When Condition="'$(_DwgPath)' == '' And Exists('$(StartupTemplate)')">
 			<PropertyGroup>
 				<_DwtPath>$(StartupTemplate)</_DwtPath>
@@ -190,6 +206,8 @@
 
 	<!-- Resolve Startup Lisp File -->
 	<Choose>
+		<When Condition="'$(_DebugAutomation)' != 'true'">
+		</When>
 		<When Condition="Exists('$(StartupLisp)')">
 			<PropertyGroup>
 				<_LspPath>$(StartupLisp)</_LspPath>
@@ -205,6 +223,7 @@
 
 	<!-- Resolve Startup Script File -->
 	<Choose>
+		<When Condition="'$(_DebugAutomation)' != 'true'"></When>
 		<When Condition="Exists('$(StartupScript)')">
 			<PropertyGroup>
 				<_ScrPath>$(StartupScript)</_ScrPath>
@@ -222,38 +241,47 @@
 	<Choose>
 		<When Condition="'$(TargetFramework)' != ''">
 			<Choose>
-				<!-- Explicit User-supplied command line arguments overrides everything -->
-				<!-- There are no startup files or dynamically-generated startup script used -->
+				<!-- Explicit project/user-supplied command line arguments overrides EVERYTHING -->
+				<!-- and there's no dynamically-generated command line, startup script or startup files used -->
 				<When Condition="'$(CommandLineArgs.Trim())' != ''">
 					<PropertyGroup>
 						<_CommandLine>$(CommandLineArgs.Trim())</_CommandLine>
 					</PropertyGroup>
 				</When>
-				<Otherwise>
-					<!-- Build the command line -->
+				<!-- Project has opted-out of dynamic startup script/command line generation and startup file loading -->
+				<When Condition="'$(_DebugAutomation)' != 'true'">
+					<PropertyGroup>
+						<_CommandLine></_CommandLine>
+					</PropertyGroup>
+				</When>
+				<Otherwise>	<!-- Build the command line -->
 					<Choose>
-						<!-- Check for a .dwg file -->
+						<!-- Check for/add a .dwg file to open -->
 						<When Condition="Exists('$(_DwgPath)')">
 							<PropertyGroup>
 								<_CommandLine>"$(_DwgPath)" </_CommandLine>
 							</PropertyGroup>
 						</When>
 						<Otherwise>
-							<!-- Check for a .dwt template file-->
+							<!-- Check for/add a .dwt template file to use -->
 							<PropertyGroup Condition="Exists('$(_DwtPath)')">
 								<_CommandLine>/t "$(_DwtPath)" </_CommandLine>
 							</PropertyGroup>
 						</Otherwise>
 					</Choose>
-					<!-- Set the startup script to the dynamically-generated 
-					     loader script file for the current target framework -->
+					
+					<!-- Set the command line script to the dynamically-generated 
+					     loader script file for the current target framework.
+						 The loader script handles loading/running the startup 
+						 LISP and SCRIPT files.
+					-->
 					<PropertyGroup>
 						<_LoaderScript>$(TargetDir)$(AssemblyName).scr</_LoaderScript>
 						<_CommandLine>$(_CommandLine.Trim()) /b "$(_LoaderScript)" </_CommandLine>
 					</PropertyGroup>
 
-					<!-- Add /nologo switch along with any additional arguments 
-						 that were specified in <AppendToCommandLine/> -->
+					<!-- Add /nologo switch along with any additional 
+					     switches/arguments specified in <AppendToCommandLine/> -->
 					<PropertyGroup>
 						<_CommandLine>$(_CommandLine.Trim()) /nologo $(AppendToCommandLine.Trim())</_CommandLine>
 					</PropertyGroup>
@@ -262,9 +290,10 @@
 		</When>
 	</Choose>
 
-	<!-- Store the resolved command line in CommandLineArgs, 
+	<!-- Store the resolved command line in <CommandLineArgs/>, 
 	for use by launchSettings.json, using the same name as
 	the json attribute -->
+	
 	<PropertyGroup Condition="'$(_CommandLine.Trim())' != ''">
 		<CommandLineArgs>$(_CommandLine.Trim())</CommandLineArgs>
 	</PropertyGroup>
@@ -273,12 +302,12 @@
 	<!-- Target Framework-Specific Loader Script Generation                     -->
 	<!-- ====================================================================== -->
 	<!-- 
-	The generated loader script loads target assembly and optional .lsp and .scr files.
-	The script contains a single lambda function that evaluates when the script executes.
-	The 3 arguments to the lambda function are MSBUILD properties that are replaced 
-	with their values for each target framework each time the script file is generated. 
-	A separate and slightly-different .scr file is generated for each target framework,
-	and is output to the folder where the corresponding target assembly is located.
+	The generated loader script NETLOADs the target assembly and loads/runs any optional 
+	.lsp and .scr files. The script contains a single lambda function that evaluates when 
+	the script executes. The 3 arguments to the lambda function are MSBUILD properties 
+	that are replaced with their values for each target framework each time the script file 
+	is generated. A separate and slightly-different .scr file is generated for each target 
+	framework, and output to the folder where the corresponding target assembly is located.
 		 
 	Both the second and third arguments are optional. If no lisp and/or scrpt file
 	is being used, the corresponding argument is an empty string.
@@ -304,26 +333,31 @@
 
 	-->
 
-	<Target Name="GenerateLoaderScript" AfterTargets="Build" Condition="'$(TargetFramework)' != ''">
+	<Target Name="GenerateLoaderScript" AfterTargets="Build" Condition="'$(_LoaderScript.Trim())' != '' And '$(DebugStartupProject)' == 'true'">
 		<PropertyGroup>
 			<_Asm>$(TargetPath.Replace('\', '\\'))</_Asm>
 			<_Lsp Condition="Exists('$(_LspPath)')">$(_LspPath.Replace('\', '\\'))</_Lsp>
 			<_Scr Condition="Exists('$(_ScrPath)')">$(_ScrPath.Replace('\', '\\'))</_Scr>
-			<_ScrContent>((lambda (asm lsp scr / f) (if (setq f (findfile asm))(progn (command "._NETLOAD" f)(if (setq f (findfile lsp))(load f))(if (setq f (findfile scr))(command "._SCRIPT" f))))(princ)) "$(_Asm)" "$(_Lsp)" "$(_Scr)")</_ScrContent>
+			<_ScriptContent>((lambda (asm lsp scr / f) (if (setq f (findfile asm))(progn (command "._NETLOAD" f)(if (setq f (findfile lsp))(load f))(if (setq f (findfile scr))(command "._SCRIPT" f))))(princ)) "$(_Asm)" "$(_Lsp)" "$(_Scr)")</_ScriptContent>
 		</PropertyGroup>
-		<WriteLinesToFile File="$(_LoaderScript)" Lines="$(_ScrContent)" Overwrite="true" WriteOnlyWhenDifferent="true"/>
-		<Message Text="[$(MSBuildProjectName) ($(TargetFramework))]: Generated loader script $(_LoaderScript)" Importance="high" />
+		<WriteLinesToFile File="$(_LoaderScript)" Lines="$(_ScriptContent)" Overwrite="true" WriteOnlyWhenDifferent="true"/>
 		
-		<Message Text="DEBUG: _Asm: $(_Asm)" Importance="high" Condition="'$(DebugLoaderScript)' == 'true'"/>
-		<Message Text="DEBUG: _LspPath: $(_LspPath)" Importance="high" Condition="'$(DebugLoaderScript)' == 'true'"/>
-		<Message Text="DEBUG: _ScrPath: $(_ScrPath)" Importance="high" Condition="'$(DebugLoaderScript)' == 'true'"/>
-		<Message Text="DEBUG: _ScrContent: $(_ScrContent)" Importance="high" Condition="'$(DebugLoaderScript)' == 'true'"/>
-		<Message Text="DEBUG: _StartupPath: $(_StartupPath)" Importance="high" Condition="'$(DebugLoaderScript)' == 'true'"/>
-		<Message Text="DEBUG: StartupPath: $(StartupPath)" Importance="high" Condition="'$(DebugLoaderScript)' == 'true'"/>
+		<Message Text="[$(MSBuildProjectName) ($(TargetFramework))]: Generated loader script $(_LoaderScript)" 
+				 Importance="high" 
+				 Condition="'$(DebugStartup)' == 'true'"/>
+		<Message Text="DEBUG: _Asm: $(_Asm)" Importance="high" Condition="'$(DebugStartup)' == 'true'"/>
+		<Message Text="DEBUG: _LspPath: $(_LspPath)" Importance="high" Condition="'$(DebugStartup)' == 'true'"/>
+		<Message Text="DEBUG: _ScrPath: $(_ScrPath)" Importance="high" Condition="'$(DebugStartup)' == 'true'"/>
+		<Message Text="DEBUG: _ScriptContent: $(_ScriptContent)" Importance="high" Condition="'$(DebugStartup)' == 'true'"/>
+		<Message Text="DEBUG: _StartupPath: $(_StartupPath)" Importance="high" Condition="'$(DebugStartup)' == 'true'"/>
+		<Message Text="DEBUG: StartupPath: $(StartupPath)" Importance="high" Condition="'$(DebugStartup)' == 'true'"/>
+		<Message Text="DEBUG: CommandLineArgs: $(CommandLineArgs)" Importance="high" Condition="'$(DebugStartup)' == 'true'"/>
 	</Target>
 
 	<!-- Delete any dangling .dwl/.dwl2 files from startup folder (*.bak files are left intact) -->
-	<Target Name="CleanStartupFolder" AfterTargets="Build" Condition="'$(TargetFramework)' != ''">
+	<Target Name="CleanStartupFolder"
+			AfterTargets="Build"
+			Condition="'$(TargetFramework)' != '' And '$(_DebugAutomation)' == 'true'">
 		<ItemGroup>
 			<_LockFiles Include="$(StartupPath)\*.dwl;$(StartupPath)\*.dwl2" Condition="Exists('$(StartupPath)')" />
 		</ItemGroup>
@@ -331,12 +365,17 @@
 	</Target>
 
 	<!-- IMPORTANT: Required to trigger evaluation of $(CommandLineArgs) -->
-	<Target Name="EvaluateCommandLineArgs" AfterTargets="Build" Condition="'$(TargetFramework)' != ''">
+	<Target Name="EvaluateCommandLineArgs" AfterTargets="Build" Condition="'$(TargetFramework)' != '' And '$(_DebugAutomation)' == 'true'">
+		<PropertyGroup>
+			<EvaluatedCommandLineArgs>$(CommandLineArgs)</EvaluatedCommandLineArgs>
+		</PropertyGroup>
 		<Message Text="[$(MSBuildProjectName) ($(TargetFramework))]: Command Line: $(CommandLineArgs)" Importance="high" />
 	</Target>
 	
 	<!-- Kills the target host executable task (e.g., acad.exe) when a build starts -->
-	<Target Name="KillTargetProcess" BeforeTargets="PreBuildEvent" Condition="'$(KillTargetProcessOnBuild)' == 'true'">
+	<Target Name="KillTargetProcess" 
+			BeforeTargets="PreBuildEvent" 
+			Condition="'$(KillTargetProcessOnBuild)' == 'true'">
 		<Exec Command="taskkill /F /IM $(ExecutableName) &gt;nul 2&gt;&amp;1 || exit 0" />
 	</Target>
 
@@ -357,7 +396,7 @@
 	that were used used for the build target.-->
 
 	<Target Name="ReportReferences" AfterTargets="Build">
-		<Message Text="[$(ProjectDisplayName)]: Built target for $(TargetDisplayName) using references from $(AcRefPath)"
+		<Message Text="[$(ProjectDisplayName)]: Built target for $(TargetFramework) using references from $(AcRefPath)"
 			Condition="'$(AcRefPath)' != ''"
 			Importance="high">
 		</Message>
@@ -368,7 +407,7 @@
 	in a PropertyGroup within the .csproj file.
 	-->
 
-	<Target Name="DebugCommandLineTarget" AfterTargets="Build" Condition="'$(DebugCommandLine)' == 'true' And '$(TargetFramework)' != ''">
+	<Target Name="DebugCommandLineTarget" AfterTargets="Build" Condition="'$(DebugStartup)' == 'true' And '$(TargetFramework)' != ''">
 		<PropertyGroup>
 			<!-- Helper formatting to show [Empty] instead of blank strings in build output -->
 			<_DwgPathDisplay Condition="'$(_DwgPath)' != ''">$(_DwgPath)</_DwgPathDisplay>
@@ -383,7 +422,7 @@
 
 		<Message Text="[$(ProjectDisplayName) DEBUG]: StartupPath:     $(StartupPath)" Importance="high" />
 		<Message Text="[$(ProjectDisplayName) DEBUG]: _DwgPath:        $(_DwgPathDisplay)" Importance="high" />
-		<Message Text="[$(ProjectDisplayName) DEBUG]: _ScrPath:     $(_ScrPathDisplay)" Importance="high" />
+		<Message Text="[$(ProjectDisplayName) DEBUG]: _ScrPath:        $(_ScrPathDisplay)" Importance="high" />
 		<Message Text="[$(ProjectDisplayName) DEBUG]: _CommandLine:    $(_CommandLineDisplay)" Importance="high" />
 		<Message Text="[$(ProjectDisplayName) DEBUG]: CommandLineArgs: $(CommandLineArgs)" Importance="high" />
 	</Target>
