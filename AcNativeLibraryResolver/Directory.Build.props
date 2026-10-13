@@ -80,11 +80,14 @@
 	in a .csproj file. For example, it can be set to
 	"accoreconsole.exe" to use AutoCAD Core Console as
 	the debug target. This property is referenced from
-	launchSettings.json -->
+	launchSettings.json and Directory.Build.targets -->
 
 	<PropertyGroup>
 		<ExecutableName>acad.exe</ExecutableName>
+		<!-- Used for pre-release Alpha builds that use an App Execution Alias -->
 		<StartupAppName>acad</StartupAppName>
+		<!-- The name of the startup folder, which must reside
+			in the root folder of the project -->
 		<StartupFolder>Startup</StartupFolder>
 	</PropertyGroup>
 

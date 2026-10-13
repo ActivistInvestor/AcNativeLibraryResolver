@@ -139,7 +139,7 @@
 	<!-- $(StartupFolder) holds the name of the startup folder (default: "Startup") -->
 
 	<Choose>
-		<When Condition="Exists('$(StartupPath)')">
+		<When Condition="Exists($(StartupPath))">
 			<PropertyGroup>
 				<StartupPath>$(StartupPath.TrimEnd('\'))</StartupPath>
 			</PropertyGroup>
@@ -155,19 +155,6 @@
 			</PropertyGroup>
 		</When>
 	</Choose>
-
-	<!-- Replaced by above logic
-	<PropertyGroup Condition="'$(StartupPath)' == '' And ">
-		<StartupPath>$(MSBuildProjectDirectory)\$(StartupFolder)</StartupPath>
-	</PropertyGroup>
-	<PropertyGroup Condition="'$(StartupPath)' != '' And !Exists('$(StartupPath)')">
-		<StartupPath></StartupPath>
-	</PropertyGroup>
-	<PropertyGroup Condition="'$(StartupPath)' != '' And Exists('$(StartupPath)')">
-		<StartupPath>$(StartupPath.TrimEnd('\'))</StartupPath>
-	</PropertyGroup>
-	-->
-
 
 	<!-- Resolve Startup DWG File -->
 	<Choose>
@@ -286,11 +273,12 @@
 	<!-- Target Framework-Specific Loader Script Generation                     -->
 	<!-- ====================================================================== -->
 	<!-- 
-	Generated loader script: loads target assembly and optional .lsp and .scr files.
+	The generated loader script loads target assembly and optional .lsp and .scr files.
+	The script contains a single lambda function that evaluates when the script executes.
 	The 3 arguments to the lambda function are MSBUILD properties that are replaced 
 	with their values for each target framework each time the script file is generated. 
-	A separate and distinct .scr file is generated for each target framework that is 
-	output to the folder where the corresponding target assembly is located.
+	A separate and slightly-different .scr file is generated for each target framework,
+	and is output to the folder where the corresponding target assembly is located.
 		 
 	Both the second and third arguments are optional. If no lisp and/or scrpt file
 	is being used, the corresponding argument is an empty string.
@@ -319,21 +307,19 @@
 	<Target Name="GenerateLoaderScript" AfterTargets="Build" Condition="'$(TargetFramework)' != ''">
 		<PropertyGroup>
 			<_Asm>$(TargetPath.Replace('\', '\\'))</_Asm>
-			<_Lsp Condition="'$(_LspPath)' != ''">$(_LspPath.Replace('\', '\\'))</_Lsp>
-			<_Scr Condition="'$(_ScrPath)' != ''">$(_ScrPath.Replace('\', '\\'))</_Scr>
+			<_Lsp Condition="Exists('$(_LspPath)')">$(_LspPath.Replace('\', '\\'))</_Lsp>
+			<_Scr Condition="Exists('$(_ScrPath)')">$(_ScrPath.Replace('\', '\\'))</_Scr>
 			<_ScrContent>((lambda (asm lsp scr / f) (if (setq f (findfile asm))(progn (command "._NETLOAD" f)(if (setq f (findfile lsp))(load f))(if (setq f (findfile scr))(command "._SCRIPT" f))))(princ)) "$(_Asm)" "$(_Lsp)" "$(_Scr)")</_ScrContent>
-			<_ScrPath>$(TargetDir)$(AssemblyName).scr</_ScrPath>
 		</PropertyGroup>
-		<WriteLinesToFile File="$(_ScrPath)" Lines="$(_ScrContent)" Overwrite="true" WriteOnlyWhenDifferent="true"/>
-		<Message Text="[$(MSBuildProjectName) ($(TargetFramework))]: Generated loader script $(_ScrPath)" Importance="high" />
-		<!-- Debug output
-		<Message Text="DEBUG: _Asm: $(_Asm)" Importance="high"/>
-		<Message Text="DEBUG: _LspPath: $(_LspPath)" Importance="high"/>
-		<Message Text="DEBUG: _ScrPath: $(_ScrPath)" Importance="high"/>
-		<Message Text="DEBUG: _ScrContent: $(_ScrContent)" Importance="high"/>
-		<Message Text="DEBUG: _StartupPath: $(_StartupPath)" Importance="high"/>
-		<Message Text="DEBUG: StartupPath: $(StartupPath)" Importance="high"/>
-		-->
+		<WriteLinesToFile File="$(_LoaderScript)" Lines="$(_ScrContent)" Overwrite="true" WriteOnlyWhenDifferent="true"/>
+		<Message Text="[$(MSBuildProjectName) ($(TargetFramework))]: Generated loader script $(_LoaderScript)" Importance="high" />
+		
+		<Message Text="DEBUG: _Asm: $(_Asm)" Importance="high" Condition="'$(DebugLoaderScript)' == 'true'"/>
+		<Message Text="DEBUG: _LspPath: $(_LspPath)" Importance="high" Condition="'$(DebugLoaderScript)' == 'true'"/>
+		<Message Text="DEBUG: _ScrPath: $(_ScrPath)" Importance="high" Condition="'$(DebugLoaderScript)' == 'true'"/>
+		<Message Text="DEBUG: _ScrContent: $(_ScrContent)" Importance="high" Condition="'$(DebugLoaderScript)' == 'true'"/>
+		<Message Text="DEBUG: _StartupPath: $(_StartupPath)" Importance="high" Condition="'$(DebugLoaderScript)' == 'true'"/>
+		<Message Text="DEBUG: StartupPath: $(StartupPath)" Importance="high" Condition="'$(DebugLoaderScript)' == 'true'"/>
 	</Target>
 
 	<!-- Delete any dangling .dwl/.dwl2 files from startup folder (*.bak files are left intact) -->
@@ -344,12 +330,15 @@
 		<Delete Files="@(_LockFiles)" />
 	</Target>
 
-
 	<!-- IMPORTANT: Required to trigger evaluation of $(CommandLineArgs) -->
 	<Target Name="EvaluateCommandLineArgs" AfterTargets="Build" Condition="'$(TargetFramework)' != ''">
 		<Message Text="[$(MSBuildProjectName) ($(TargetFramework))]: Command Line: $(CommandLineArgs)" Importance="high" />
 	</Target>
-
+	
+	<!-- Kills the target host executable task (e.g., acad.exe) when a build starts -->
+	<Target Name="KillTargetProcess" BeforeTargets="PreBuildEvent" Condition="'$(KillTargetProcessOnBuild)' == 'true'">
+		<Exec Command="taskkill /F /IM $(ExecutableName) &gt;nul 2&gt;&amp;1 || exit 0" />
+	</Target>
 
 	<!-- ==================================================== -->
 	<!-- Diagnostic / Informational output -->
